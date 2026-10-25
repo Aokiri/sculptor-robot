@@ -1,0 +1,2 @@
+# Output of the simulations (saved steps and plots). It is generated, so git ignores it.
+# Plots that go in the report are copied to docs/.

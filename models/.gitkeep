@@ -1,0 +1,3 @@
+# 3D models of the statues (.obj or .stl).
+# They should be closed meshes, not too detailed, with a simple shape like a chess pawn
+# (nothing hidden underneath that the tool can't reach) and roughly the proportions of the block.

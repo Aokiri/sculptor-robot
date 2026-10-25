@@ -1,0 +1,3 @@
+# Our modules, imported by the notebooks: cell (frames and table PID), model (voxels of the statue),
+# controller (arm control) and carving (the carving simulation).
+# Remove this file when the first module and __init__.py are added.

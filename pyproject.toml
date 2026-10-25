@@ -1,0 +1,39 @@
+[project]
+name = "sculptor"
+version = "0.1.0"
+description = "A simulated Panda arm that carves a statue on a rotating table"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# Same versions as the course environment (rca), plus trimesh for the 3D models
+dependencies = [
+    "roboticstoolbox-python==1.4.3",
+    "swift-sim==2.0.0",
+    "spatialmath-python==1.1.17",
+    "spatialgeometry==1.4.0",
+    "rtb-data==2.0.0",
+    "numpy==2.5.3",
+    "scipy==1.16.0",
+    "matplotlib==3.10.3",
+    "ipykernel==6.29.5",
+    "ipympl==0.9.7",
+    "nbconvert==7.17.1",
+    "keyboard==0.13.5",
+    "setuptools==80.9.0",
+    "trimesh==5.2.0",
+]
+
+# Installs the sculptor/ folder in the .venv, so the notebooks can do "import sculptor" directly
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sculptor"]
+
+# Indirect dependencies of the toolbox and Swift, kept at the same versions as rca
+[tool.uv]
+constraint-dependencies = [
+    "pgraph-python==0.6.5",
+    "ansitable==1.0.1",
+    "websockets==17.1",
+]
