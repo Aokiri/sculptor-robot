@@ -1,8 +1,10 @@
 # Sculptor Robot
 
-A Panda arm carves a statue out of a marble block that sits on a rotating table. Everything is simulated: Python and the Robotics Toolbox for the control, Swift for the 3D view.
+A Panda arm carves a statue out of a marble block that sits on a rotating table.
 
-Midterm project of *Robot Control Applications* (USI - SUPSI). Work in progress.
+Everything is simulated: Python and the Robotics Toolbox for the control, Swift for the 3D view.
+
+Midterm project of *Robot Control Applications* (SUPSI). Work in progress.
 
 <!-- TODO: short looping GIF of the robot carving (docs/media/) -->
 
