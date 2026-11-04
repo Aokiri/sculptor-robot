@@ -28,7 +28,7 @@ class Voxels:
     size: float # side of a cube, metres
     
     def __post_init__(self) -> None:
-        # The checks of the contract, so a wrong voxelization fails here and not in Swift
+        # The checks of the contract, so a wrong voxelization fails as soon as it is built
         assert self.centers.ndim == 2 and self.centers.shape[1] == 3, "centers must be (N, 3)"
         assert self.is_statue.shape == (len(self.centers),), "one is_statue per cube"
         assert self.is_statue.dtype == bool, "is_statue must be bool"

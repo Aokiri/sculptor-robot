@@ -1,4 +1,4 @@
-"""Frames of the cell: the table, the block on it and the chisel tip."""
+"""Frames of the table, the block on it and the chisel tip."""
 
 import numpy as np
 import spatialmath as sm
@@ -12,7 +12,7 @@ TIP = sm.SE3(0.0, 0.0, 0.105) # This is 0.03 (chisel's cylinder) + 0.075 (0.15 /
 
 
 class Cell:
-    """Where the table top is in the world and where the chisel tip is on the hand."""
+    """Pose of the table top in the world and of the chisel tip on the hand."""
     
     def __init__(self, table_top: sm.SE3 = TABLE_TOP, tip: sm.SE3 = TIP) -> None:
         self._table_top = table_top

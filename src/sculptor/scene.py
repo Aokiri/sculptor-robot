@@ -44,7 +44,7 @@ TABLE_RADIUS: float = 0.22
 CHISEL_RADIUS: float = 0.008
 TIP_RADIUS: float = 0.012
 
-# The two parts of the chisel, always in this order: the body and the ball at its tip
+# The body of the chisel and the ball at its tip, in this order
 Chisel = tuple[sg.Cylinder, sg.Sphere]
 
 

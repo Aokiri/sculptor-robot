@@ -1,1 +1,1 @@
-"""Modules shared by the notebooks: frames of the cell, the statue model, the arm controller and the carving simulation."""
+"""Modules shared by the notebooks, one for each part of the project (see the README)."""

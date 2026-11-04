@@ -2,7 +2,7 @@
 
 A Panda arm carves a statue out of a marble block that sits on a rotating table.
 
-Everything is simulated: Python and the Robotics Toolbox for the control, Swift for the 3D view.
+Everything is simulated, with Python and the Robotics Toolbox for the control and Swift for the 3D view.
 
 Midterm project of *Robot Control Applications* (SUPSI). Work in progress.
 
@@ -14,11 +14,11 @@ The block is made of small cubes (voxels). We take a 3D model of the statue, and
 
 ```mermaid
 flowchart TD
-    A["3D model of the statue"] --> B["Voxelize: which cubes must go?"]
+    A["3D model of the statue"] --> B["Voxelize the model"]
     B --> C["Turn the table to the next side (PID)"]
-    C --> D["Next cube: where is it in the world?"]
+    C --> D["Find the next cube in the world"]
     D --> E["Move the tool there (resolved-rate control)"]
-    E --> F["Cube touched: remove it and save the step"]
+    E --> F["Remove the touched cube and save the step"]
     F --> G{"Side done?"}
     G -- no --> D
     G -- yes --> H{"Statue done?"}
@@ -40,7 +40,7 @@ $$\dot{\mathbf{q}} = \lambda \mathbf{J}^+ (\mathbf{x}^\ast - \mathbf{k}(\mathbf{
 
 **5. Remove and save.** When the tool reaches the cube, the cube is removed and the step is saved (joints, table angle, removed cubes).
 
-**6. Replay and compare.** The simulation runs without Swift, then the saved steps are played back in Swift. Running it with different settings gives the comparisons for the report: open vs. closed loop, with and without noise on the joints, with and without the posture task.
+**6. Replay and compare.** The simulation runs without Swift, then the saved steps are played back in Swift. Running it with different settings (open or closed loop, noise on the joints, posture task on or off) gives the comparisons for the report.
 
 ## Folders
 
@@ -58,7 +58,7 @@ Modules in `src/sculptor/` (they are added step by step):
 
 | Module | Content |
 |--------|---------|
-| `scene.py` | Swift helpers: drawing the table, the block and the chisel; `fix_mesh_paths` lets Swift load meshes on Windows |
+| `scene.py` | Drawing the table, the block and the chisel in Swift, and `fix_mesh_paths` so Swift loads meshes on Windows |
 | `cell.py` | Frames of the cell (table, block, chisel tip) and the table PID |
 | `model.py` | Loading and voxelizing the 3D model |
 | `controller.py` | Resolved-rate control of the arm |
