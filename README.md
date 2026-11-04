@@ -48,6 +48,7 @@ $$\dot{\mathbf{q}} = \lambda \mathbf{J}^+ (\mathbf{x}^\ast - \mathbf{k}(\mathbf{
 sculptor-robot/
 ├── src/sculptor/   # modules shared by the notebooks
 ├── notebooks/      # one notebook per step, run in order
+├── html/           # the notebooks exported to HTML, to read them without Python
 ├── models/         # 3D models of the statues
 ├── results/        # results that take long to compute, one folder per notebook
 └── docs/           # report, slides, images
@@ -57,7 +58,7 @@ Modules in `src/sculptor/` (they are added step by step):
 
 | Module | Content |
 |--------|---------|
-| `scene.py` | Swift helpers; `fix_mesh_paths` lets Swift load meshes on Windows |
+| `scene.py` | Swift helpers: drawing the table, the block and the chisel; `fix_mesh_paths` lets Swift load meshes on Windows |
 | `cell.py` | Frames of the cell (table, block, chisel tip) and the table PID |
 | `model.py` | Loading and voxelizing the 3D model |
 | `controller.py` | Resolved-rate control of the arm |
@@ -65,7 +66,7 @@ Modules in `src/sculptor/` (they are added step by step):
 
 ## How to reproduce
 
-**Environment.** The environment is the same as the course one (`rca`), plus `trimesh` for the 3D models. With [uv](https://docs.astral.sh/uv/):
+**Environment.** The environment is the same as the course one (`rca`), plus `trimesh` for the 3D models and `pandas` for the tables. With [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync
@@ -79,15 +80,16 @@ If you prefer to keep working with the course environment, install the project i
 uv pip install --python path/to/rca -e .
 ```
 
-This adds `sculptor` and `trimesh` and nothing else. With `-e`, changes in `src/` are picked up without installing again (restart the kernel after a change).
+This adds `sculptor`, `trimesh` and `pandas` and nothing else. With `-e`, changes in `src/` are picked up without installing again (restart the kernel after a change).
 
 On Windows, Swift cannot load meshes out of the box. The notebooks fix this in their setup with `fix_mesh_paths()`, so there is nothing to patch by hand.
 
-**Notebooks.** Run them in order. Swift opens a tab in the default browser.
+**Notebooks.** Run them in order. Swift opens a tab in the default browser. Each notebook is also exported to `html/` after running it from scratch.
 
 | Notebook | What it does | Time |
 |----------|--------------|------|
 | `00_swift_prototype` | Measures how many cubes the Swift scene can hold, to choose the cube size | about 1 min |
+| `01_cell_frames` | Checks the frames of the table and the block, and shows the cell in Swift with a pawn | under 1 min |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
