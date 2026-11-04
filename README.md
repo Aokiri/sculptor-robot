@@ -46,22 +46,52 @@ $$\dot{\mathbf{q}} = \lambda \mathbf{J}^+ (\mathbf{x}^\ast - \mathbf{k}(\mathbf{
 
 ```
 sculptor-robot/
-├── sculptor/     # our modules (cell, model, controller, carving)
-├── notebooks/    # prototypes, model checks and the main notebook
-├── models/       # 3D models of the statues
-├── results/      # simulation output (not committed)
-└── docs/         # report, slides, images
+├── src/sculptor/   # modules shared by the notebooks
+├── notebooks/      # one notebook per step, run in order
+├── models/         # 3D models of the statues
+├── results/        # results that take long to compute, one folder per notebook
+└── docs/           # report, slides, images
 ```
 
-## Setup
+Modules in `src/sculptor/` (they are added step by step):
 
-The environment is the same as the course one (`rca`), plus `trimesh` for the 3D models. With [uv](https://docs.astral.sh/uv/):
+| Module | Content |
+|--------|---------|
+| `scene.py` | Swift helpers; `fix_mesh_paths` lets Swift load meshes on Windows |
+| `cell.py` | Frames of the cell (table, block, chisel tip) and the table PID |
+| `model.py` | Loading and voxelizing the 3D model |
+| `controller.py` | Resolved-rate control of the arm |
+| `carving.py` | The carving simulation and its saved steps |
+
+## How to reproduce
+
+**Environment.** The environment is the same as the course one (`rca`), plus `trimesh` for the 3D models. With [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync
 ```
 
 This creates `.venv` and installs `sculptor`, so the notebooks can just `import sculptor`. In VS Code, pick `.venv` as the notebook kernel.
+
+If you prefer to keep working with the course environment, install the project into it instead (the path is where your `rca` venv lives):
+
+```bash
+uv pip install --python path/to/rca -e .
+```
+
+This adds `sculptor` and `trimesh` and nothing else. With `-e`, changes in `src/` are picked up without installing again (restart the kernel after a change).
+
+On Windows, Swift cannot load meshes out of the box. The notebooks fix this in their setup with `fix_mesh_paths()`, so there is nothing to patch by hand.
+
+**Notebooks.** Run them in order. Swift opens a tab in the default browser.
+
+| Notebook | What it does | Time |
+|----------|--------------|------|
+| `00_swift_prototype` | Measures how many cubes the Swift scene can hold, to choose the cube size | about 1 min |
+
+The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
+
+**Saved results.** None yet. Results that take long to compute will be saved in `results/<notebook>/`, and each notebook will have a flag in its setup to compute them again.
 
 ## License
 
