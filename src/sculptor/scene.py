@@ -1,11 +1,19 @@
 """Helpers for the Swift scene."""
 
+import base64
+import io
+import tarfile
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import spatialgeometry as sg
 import spatialmath as sm
 import swift
+from IPython.display import HTML
+from PIL import Image
 
 from sculptor.cell import CHISEL_LENGTH, Cell
 from sculptor.model import Voxels
@@ -85,3 +93,77 @@ def add_chisel(env: swift.Swift, T_tip: sm.SE3) -> Chisel:
     for part in chisel:
         env.add(part)
     return chisel
+
+
+# Recordings of the notebooks, apart from the numeric results. Names start with the notebook
+# number, so one notebook can have several (01_cell_frames_turn.gif, ...)
+RECORDINGS: Path = Path(__file__).resolve().parents[2] / "results" / "recordings"
+# Swift can only ask the browser to download a recording, so it lands in the downloads folder
+DOWNLOADS: Path = Path.home() / "Downloads"
+
+# Same view in every recording, from the side so the robot and the table are both in sight
+CAMERA_POSITION: list[float] = [0.45, -1.35, 0.85]
+CAMERA_LOOK_AT: list[float] = [0.45, 0.0, 0.3]
+
+# Part of the browser window that shows the robot and the table (left, top, right, bottom,
+# as fractions of the window), and the size of the GIF, so it stays light
+CROP: tuple[float, float, float, float] = (0.25, 0.18, 0.75, 0.78)
+GIF_WIDTH: int = 560
+KEEP_EVERY: int = 3
+
+
+@contextmanager
+def recording(env: swift.Swift, gif: Path, downloads: Path = DOWNLOADS) -> Iterator[None]:
+    """Record what Swift draws inside the with block and save it as `gif`.
+
+    Swift saves PNG frames, which the browser writes much faster than a GIF, and the GIF is
+    built here from them. It plays at the real speed of the recording.
+    """
+    download = downloads / f"{gif.stem}.tar"
+    # The browser renames a download that already exists, so an old one would hide the new one
+    download.unlink(missing_ok=True)
+    env.set_camera_pose(CAMERA_POSITION, CAMERA_LOOK_AT)
+    # The framerate only names the frames; their real timing is measured below
+    env.start_recording(gif.stem, 20, format="png")
+    started = time.perf_counter()
+    yield
+    elapsed = time.perf_counter() - started
+    env.stop_recording()
+    _save_gif(download, gif, elapsed)
+
+
+def _wait_for_download(download: Path, timeout: float) -> None:
+    """Wait until the file exists and its size stops changing (the browser writes it at the end)."""
+    deadline = time.time() + timeout
+    last_size = -1
+    while time.time() < deadline:
+        if download.exists():
+            size = download.stat().st_size
+            if size > 0 and size == last_size:
+                return
+            last_size = size
+        time.sleep(1.0)
+    raise TimeoutError(f"{download} did not appear; is the browser saving downloads to {download.parent}?")
+
+
+def _save_gif(download: Path, gif: Path, elapsed: float, timeout: float = 120.0) -> None:
+    """Build the GIF from the downloaded frames, crop and shrink it, and delete the download."""
+    _wait_for_download(download, timeout)
+    with tarfile.open(download) as tar:
+        names = sorted(m.name for m in tar.getmembers() if m.isfile())[::KEEP_EVERY]
+        frames = [Image.open(io.BytesIO(tar.extractfile(name).read())).convert("RGB") for name in names]
+    w, h = frames[0].size
+    box = (int(w * CROP[0]), int(h * CROP[1]), int(w * CROP[2]), int(h * CROP[3]))
+    size = (GIF_WIDTH, round(GIF_WIDTH * (box[3] - box[1]) / (box[2] - box[0])))
+    frames = [frame.crop(box).resize(size) for frame in frames]
+    # Spread the real duration over the frames we keep
+    duration = round(1000 * elapsed / len(frames))
+    gif.parent.mkdir(parents=True, exist_ok=True)
+    frames[0].save(gif, save_all=True, append_images=frames[1:], duration=duration, loop=0, optimize=True)
+    download.unlink()
+
+
+def show_gif(gif: Path) -> HTML:
+    """Show a GIF in the output. It is embedded, so the HTML export shows it without the file."""
+    data = base64.b64encode(gif.read_bytes()).decode()
+    return HTML(f'<img src="data:image/gif;base64,{data}" alt="{gif.stem}">')
