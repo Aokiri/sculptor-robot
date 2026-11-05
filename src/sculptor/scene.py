@@ -12,10 +12,11 @@ from typing import Any
 import spatialgeometry as sg
 import spatialmath as sm
 import swift
+import trimesh
 from IPython.display import HTML
 from PIL import Image
 
-from sculptor.cell import CHISEL_LENGTH, Cell
+from sculptor.cell import CHISEL_LENGTH, CHISEL_RADIUS, TIP_LENGTH, TIP_WIDTH, Cell
 from sculptor.model import Voxels
 
 # Kept before fix_mesh_paths replaces it, so calling the fix twice does no harm
@@ -44,16 +45,19 @@ MARBLE: list[float] = [0.92, 0.92, 0.88, 1.0]   # #ebebe0
 STATUE: list[float] = [0.63, 0.32, 0.18, 1.0]   # #a0522d
 WOOD: list[float] = [0.40, 0.30, 0.20, 1.0]
 STEEL: list[float] = [0.30, 0.30, 0.30, 1.0]
-TIP_RED: list[float] = [0.85, 0.10, 0.10, 1.0]
+POLISHED_STEEL: list[float] = [0.55, 0.55, 0.58, 1.0]
 
-# Sizes used only for drawing [m]. The chisel is thin so it does not hide the cubes
-# around the one it touches, and the ball marks the point that removes them
+# Only used for drawing [m]; the sizes of the chisel are in cell.py
 TABLE_RADIUS: float = 0.22
-CHISEL_RADIUS: float = 0.008
-TIP_RADIUS: float = 0.012
 
-# The body of the chisel and the ball at its tip, in this order
-Chisel = tuple[sg.Cylinder, sg.Sphere]
+# Side of a drawn cube over the side of its voxel when add_block shows the gaps
+GAP_SCALE: float = 0.94
+
+# Swift has no cones, so the tip of the chisel is a mesh made once with trimesh
+TIP_MESH: Path = Path(__file__).resolve().parents[2] / "models" / "chisel_tip.stl"
+
+# The body of the chisel and its pointed tip, in this order
+Chisel = tuple[sg.Cylinder, sg.Mesh]
 
 
 def add_table(env: swift.Swift, cell: Cell) -> None:
@@ -69,26 +73,41 @@ def place_block(cubes: list[sg.Cuboid], voxels: Voxels, cell: Cell, phi: float) 
         cube.T = T_block * sm.SE3(p)
 
 
-def add_block(env: swift.Swift, voxels: Voxels, cell: Cell, phi: float = 0.0) -> tuple[list[sg.Cuboid], list[int]]:
-    """Add one cube per voxel. The ids are kept because removing by id is much faster."""
-    cubes = [sg.Cuboid(scale=[voxels.size] * 3, color=STATUE if s else MARBLE)
+def add_block(env: swift.Swift, voxels: Voxels, cell: Cell, phi: float = 0.0,
+              gaps: bool = False) -> tuple[list[sg.Cuboid], list[int]]:
+    """Add one cube per voxel. The ids are kept because removing by id is much faster.
+
+    With gaps=True the cubes are drawn a bit smaller than the voxels, so the grid of the block
+    shows. It is only for looking at the voxelization; contact and collisions use voxels.size.
+    """
+    side = voxels.size * (GAP_SCALE if gaps else 1.0)
+    cubes = [sg.Cuboid(scale=[side] * 3, color=STATUE if s else MARBLE)
              for s in voxels.is_statue]
     place_block(cubes, voxels, cell, phi)
     ids = [env.add(cube) for cube in cubes]
     return cubes, ids
 
 
+def _tip_mesh() -> Path:
+    """The cone of the tip as an .stl file, with its base at z = 0 and its point at z = TIP_LENGTH."""
+    if not TIP_MESH.exists():
+        TIP_MESH.parent.mkdir(parents=True, exist_ok=True)
+        trimesh.creation.cone(radius=TIP_WIDTH / 2, height=TIP_LENGTH, sections=24).export(TIP_MESH)
+    return TIP_MESH
+
+
 def place_chisel(chisel: Chisel, T_tip: sm.SE3) -> None:
-    """Body and tip of the chisel, from the pose of the tip."""
+    """Body and tip of the chisel, from the pose of the point."""
     body, tip = chisel
-    body.T = T_tip * sm.SE3(0.0, 0.0, -CHISEL_LENGTH / 2)
-    tip.T = T_tip
+    body_length = CHISEL_LENGTH - TIP_LENGTH
+    body.T = T_tip * sm.SE3(0.0, 0.0, -TIP_LENGTH - body_length / 2)
+    tip.T = T_tip * sm.SE3(0.0, 0.0, -TIP_LENGTH)
 
 
 def add_chisel(env: swift.Swift, T_tip: sm.SE3) -> Chisel:
-    """A thin cylinder with a red ball at the tip, so the contact point is easy to see."""
-    chisel = (sg.Cylinder(radius=CHISEL_RADIUS, length=CHISEL_LENGTH, color=STEEL),
-              sg.Sphere(radius=TIP_RADIUS, color=TIP_RED))
+    """A point chisel, a thin steel body with a polished cone at its end."""
+    chisel = (sg.Cylinder(radius=CHISEL_RADIUS, length=CHISEL_LENGTH - TIP_LENGTH, color=STEEL),
+              sg.Mesh(str(_tip_mesh()), color=POLISHED_STEEL))
     place_chisel(chisel, T_tip)
     for part in chisel:
         env.add(part)

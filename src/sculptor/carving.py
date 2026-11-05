@@ -72,3 +72,14 @@ def load_log(path: Path) -> Log:
         settings = Settings(**{f.name: data[f.name].item() for f in fields(Settings)})
         return Log(data["t"], data["q"], data["phi"], data["target"], data["tip_error"],
                    data["removed_at"], voxels, settings)
+        
+        
+def carving_order(voxels: Voxels) -> np.ndarray:
+    """Indices of the marble cubes in the order they are removed.
+    
+    Top layer first, and inside a layer from the outside in, so the chisel, which comes in
+    from above and outside, always passes where the cubes are already gone.
+    """
+    r = np.hypot(voxels.centers[:, 0], voxels.centers[:, 1])
+    order = np.lexsort((-r, -voxels.centers[:, 2]))
+    return order[~voxels.is_statue[order]]
