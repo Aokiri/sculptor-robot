@@ -16,6 +16,10 @@ TIP = sm.SE3(0.0, 0.0, 0.105)
 # 20 degrees is the smallest tilt that reaches every cube (notebook 03); 30 leaves a margin.
 APPROACH_TILT: float = np.deg2rad(30)
 
+# The table turns between the sides of the block and the arm carves a whole side with the table still.
+# 4 sides keep the blocked cubes of one turn per cube; 8 blocks more (notebook 04)
+N_SIDES: int = 4
+
 # Only the point of the tip removes cubes, so the point can be up to half a cube away from the
 # center of its target before it enters another cube.
 # The tip is a cone half a cube wide.
@@ -63,6 +67,14 @@ class Cell:
         x, y = self._table_top.t[:2]
         toward_robot = np.arctan2(-y, -x)
         return float(toward_robot - np.arctan2(p_B[1], p_B[0]))
+    
+    def side_angle(self, side: np.ndarray, n_sides: int = N_SIDES) -> np.ndarray:
+        """Angle of the table that brings a side of the block in front of the robot.
+        
+        Side k points along the angle 2 pi k / n_sides of the block frame, so this is facing_angle for that direction.
+        """
+        x, y = self._table_top.t[:2]
+        return np.arctan2(-y, -x) - side * 2 * np.pi / n_sides
     
     def tip_target(self, p_W: np.ndarray, tilt: float = APPROACH_TILT) -> sm.SE3:
         """Pose of the chisel tip at a point of the world, pointing at the table and tilted down."""

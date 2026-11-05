@@ -10,6 +10,7 @@ import spatialgeometry as sg
 import spatialmath as sm
 
 from sculptor.cell import CHISEL_LENGTH, TIP_WIDTH, Cell
+from sculptor.model import Voxels
 
 # Hitboxes are this much bigger than the shapes Swift draws [m],
 # so no collision here means no collision on screen either
@@ -44,6 +45,7 @@ class Hitboxes:
     
     def __init__(self, robot: rtb.Robot, cell: Cell) -> None:
         self._robot = robot
+        self._cell = cell
         self._link_index = {link.name: i for i, link in enumerate(robot.links)}
         # The hand is a link of the gripper, fixed to link 8
         self._hand_offset = sm.SE3(robot.grippers[0].links[0].Ts)
@@ -90,6 +92,27 @@ class Hitboxes:
         centers.append((T_ee * self._chisel[0].T).T)
         radii.append(self._chisel[1])
         return np.vstack(centers), np.concatenate(radii)
+    
+    def blocked(self, voxels: Voxels, order: np.ndarray, phi: np.ndarray, q: np.ndarray,
+                extra: float = 0.0, arm_scale: float = 1.0) -> list[int]:
+        """Cubes of the order whose pose touches a cube that is still there.
+        
+        phi and q are the table angle and the joints for each cube of the order.
+        arm_scale scales the spheres of the arm and the hand, and extra is added to every sphere
+        (notebook 03, section 5)
+        """
+        n_chisel = self.count["chisel"]
+        present = np.ones(len(voxels.centers), dtype=bool)
+        out = []
+        for i, angle, q_i in zip(order, phi, q):
+            # The target goes first since the point of the chisel is meant to be inside it.
+            present[i] = False
+            centers, radii = self.world(q_i)
+            radii[:-n_chisel] *= arm_scale
+            radii += extra
+            if touched(self._cell.world_to_block(centers, angle), radii, voxels.centers[present], voxels.size).any():
+                out.append(int(i))
+        return out
     
     
 def touched(centers: np.ndarray, radii: np.ndarray, cubes: np.ndarray, size: float) -> np.ndarray:

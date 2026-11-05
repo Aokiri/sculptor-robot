@@ -7,8 +7,9 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 import numpy as np
+import roboticstoolbox as rtb
 
-from sculptor.cell import Cell
+from sculptor.cell import N_SIDES, Cell
 from sculptor.model import Voxels
 
 # Time step of the simulation [s]
@@ -74,12 +75,52 @@ def load_log(path: Path) -> Log:
                    data["removed_at"], voxels, settings)
         
         
-def carving_order(voxels: Voxels) -> np.ndarray:
-    """Indices of the marble cubes in the order they are removed.
-    
-    Top layer first, and inside a layer from the outside in, so the chisel, which comes in
-    from above and outside, always passes where the cubes are already gone.
+def side_of(centers: np.ndarray, n_sides: int) -> np.ndarray:
+    """Side of the block of each cube, from 0 to n_sides - 1, counted from the x axis of the block."""
+    # A cube belongs to the side its angle around the axis of the table is closest to
+    theta = np.arctan2(centers[:, 1], centers[:, 0])
+    return np.round(theta / (2 * np.pi / n_sides)).astype(int) % n_sides
+
+
+def carving_order(voxels: Voxels, n_sides: int | None = N_SIDES) -> np.ndarray:
+    """Indices of the marble cubes in the order they are removed, layer by layer from the top.
+
+    With n_sides, the table shows one side after the other, and in each side the arm starts with the
+    cubes closest to the robot. With None, the table turns every cube to the front (notebook 03) and
+    each layer goes from the outside in.
     """
-    r = np.hypot(voxels.centers[:, 0], voxels.centers[:, 1])
-    order = np.lexsort((-r, -voxels.centers[:, 2]))
+    c = voxels.centers
+    if n_sides is None:
+        order = np.lexsort((-np.hypot(c[:, 0], c[:, 1]), -c[:, 2]))
+    else:
+        side = side_of(c, n_sides)
+        angle = side * 2 * np.pi / n_sides
+        # How far each cube sticks out toward the robot once its side faces it
+        out = c[:, 0] * np.cos(angle) + c[:, 1] * np.sin(angle)
+        order = np.lexsort((-out, side, -c[:, 2]))
     return order[~voxels.is_statue[order]]
+
+
+def table_angles(voxels: Voxels, order: np.ndarray, cell: Cell, n_sides: int | None = N_SIDES) -> np.ndarray:
+    """Angle of the table for each cube of the order."""
+    if n_sides is None:
+        return np.array([cell.facing_angle(voxels.centers[i]) for i in order])
+    return cell.side_angle(side_of(voxels.centers[order], n_sides), n_sides)
+
+
+def solve_poses(robot: rtb.Robot, cell: Cell, voxels: Voxels, order: np.ndarray, phi: np.ndarray,
+                seed: int = 0) -> np.ndarray:
+    """Joints (len(order), 7) with the tip on each cube of the order, each IK starting from the previous one.
+
+    seed fixes the random restarts of ikine_LM, so every run gives the same poses.
+    """
+    q, q0 = [], robot.qr
+    for i, angle in zip(order, phi):
+        target = cell.tip_target(cell.block_to_world(voxels.centers[i], angle)[0]) * cell.tip.inv()
+        solution = robot.ikine_LM(target, q0=q0, seed=seed)
+        if not solution.success:
+            solution = robot.ikine_LM(target, q0=robot.qr, seed=seed)
+        assert solution.success, f"no IK for cube {i}"
+        q.append(solution.q)
+        q0 = solution.q
+    return np.array(q)
