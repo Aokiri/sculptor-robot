@@ -97,7 +97,13 @@ Modules in `src/sculptor/` (they are added step by step):
 uv sync
 ```
 
-This creates `.venv` and installs `sculptor`, so the notebooks can just `import sculptor`. In VS Code, pick `.venv` as the notebook kernel.
+This creates `.venv` and installs `sculptor`, so the notebooks can just `import sculptor`. The notebooks are saved with a kernel called `sculptor-robot`, which runs the Python of `.venv`. Register it once:
+
+```bash
+uv run python -m ipykernel install --sys-prefix --name sculptor-robot --display-name sculptor-robot
+```
+
+In VS Code it then shows up in **Select Kernel** → **Jupyter Kernel**.
 
 If you prefer to keep working with the course environment, install the project into it instead (the path is where your `rca` venv lives):
 
@@ -105,7 +111,7 @@ If you prefer to keep working with the course environment, install the project i
 uv pip install --python path/to/rca -e .
 ```
 
-This adds `sculptor`, `trimesh` and `pandas` and nothing else (`pillow`, used for the GIFs, already comes with matplotlib). With `-e`, changes in `src/` are picked up without installing again (restart the kernel after a change).
+This adds `sculptor`, `trimesh` and `pandas` and nothing else (`pillow`, used for the GIFs, already comes with matplotlib). With `-e`, changes in `src/` are picked up without installing again (restart the kernel after a change). With this route, pick `rca` as the kernel instead of `sculptor-robot`.
 
 On Windows, Swift cannot load meshes out of the box. The notebooks fix this in their setup with `fix_mesh_paths()`, so there is nothing to patch by hand.
 
