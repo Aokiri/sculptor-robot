@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "A simulated Panda arm that carves a statue on a rotating table"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-# Same versions as the course environment (rca), plus trimesh for the 3D models and pandas for the tables
+# Same versions as the course environment (rca), plus trimesh for the 3D models, pandas for the tables
+# and pillow (already in rca through matplotlib) for the GIFs
 dependencies = [
     "roboticstoolbox-python==1.4.3",
     "swift-sim==2.0.0",
@@ -21,6 +22,7 @@ dependencies = [
     "setuptools==80.9.0",
     "trimesh==5.2.0",
     "pandas==3.1.1",
+    "pillow==12.3.0",
 ]
 
 # Installs src/sculptor/ in the .venv, so the notebooks can do "import sculptor" directly
