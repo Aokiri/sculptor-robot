@@ -7814,7 +7814,7 @@ a.anchor-link {
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <p>The block is stored once, in its own frame and the table moves that frame.
-Here we check that goin from the block frame to the world and back gives the same points and we look at the cell in Swift with a pawn made from a radius profile (<code>proxy_pawn</code>) in place of the statue.</p>
+Here we check that going from the block frame to the world and back gives the same points and we look at the cell in Swift with a pawn made from a radius profile (<code>proxy_pawn</code>) in place of the statue.</p>
 </div>
 </div>
 </div>
@@ -7841,7 +7841,7 @@ Here we check that goin from the block frame to the world and back gives the sam
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">nullcontext</span>
 
-<span class="c1"># A few docstrings in the toolbox trigger SyntaxWarnings when Pytohn compiles them... not related to our code.</span>
+<span class="c1"># A few docstrings in the toolbox trigger SyntaxWarnings when Python compiles them; not related to our code</span>
 <span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s2">"ignore"</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="ne">SyntaxWarning</span><span class="p">)</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
@@ -7850,11 +7850,19 @@ Here we check that goin from the block frame to the world and back gives the sam
 <span class="kn">import</span><span class="w"> </span><span class="nn">spatialgeometry</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sg</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">swift</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cell</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">proxy_pawn</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.scene</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span><span class="n">RECORDINGS</span><span class="p">,</span> <span class="n">add_block</span><span class="p">,</span> <span class="n">add_chisel</span><span class="p">,</span> <span class="n">add_table</span><span class="p">,</span> <span class="n">fix_mesh_paths</span><span class="p">,</span> <span class="n">place_block</span><span class="p">,</span>
-                            <span class="n">recording</span><span class="p">,</span> <span class="n">show_gif</span><span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">STATUE_HEIGHT</span><span class="p">,</span> <span class="n">proxy_pawn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.scene</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">RECORDINGS</span><span class="p">,</span>
+    <span class="n">add_block</span><span class="p">,</span>
+    <span class="n">add_chisel</span><span class="p">,</span>
+    <span class="n">add_table</span><span class="p">,</span>
+    <span class="n">fix_mesh_paths</span><span class="p">,</span>
+    <span class="n">place_block</span><span class="p">,</span>
+    <span class="n">recording</span><span class="p">,</span>
+    <span class="n">show_gif</span><span class="p">,</span>
+<span class="p">)</span>
 
-<span class="c1"># Closing a Swift window leaves a few websocket task pending but they are harmless</span>
+<span class="c1"># Closing a Swift window leaves a few websocket tasks pending; they are harmless</span>
 <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">"asyncio"</span><span class="p">)</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">CRITICAL</span><span class="p">)</span>
 
 <span class="c1"># Without this, Swift on Windows cannot load any mesh (see sculptor/scene.py)</span>
@@ -7899,9 +7907,7 @@ Here we check that goin from the block frame to the world and back gives the sam
 <div class="jp-InputPrompt jp-InputArea-prompt">In [2]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
-<div class="highlight hl-ipython3"><pre><span></span><span class="c1"># Height of the pawn for now; the real one is chosen in the next notebooks, from what the arm can reach</span>
-<span class="n">PAWN_HEIGHT</span> <span class="o">=</span> <span class="mf">0.42</span>
-<span class="c1"># The round trip only has floating point error, many orders of magnitude below a cube</span>
+<div class="highlight hl-ipython3"><pre><span></span><span class="c1"># The round trip only has floating point error, many orders of magnitude below a cube</span>
 <span class="n">TOLERANCE</span> <span class="o">=</span> <span class="mf">1e-12</span>
 <span class="n">N_ANGLES</span> <span class="o">=</span> <span class="mi">8</span>
 <span class="n">QUARTER_TURNS</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">360</span><span class="p">,</span> <span class="mi">90</span><span class="p">)</span>
@@ -7919,7 +7925,7 @@ Here we check that goin from the block frame to the world and back gives the sam
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
 <div class="highlight hl-ipython3"><pre><span></span><span class="n">cell</span> <span class="o">=</span> <span class="n">Cell</span><span class="p">()</span>
-<span class="n">voxels</span> <span class="o">=</span> <span class="n">proxy_pawn</span><span class="p">(</span><span class="n">height</span><span class="o">=</span><span class="n">PAWN_HEIGHT</span><span class="p">)</span>
+<span class="n">voxels</span> <span class="o">=</span> <span class="n">proxy_pawn</span><span class="p">(</span><span class="n">height</span><span class="o">=</span><span class="n">STATUE_HEIGHT</span><span class="p">)</span>
 
 <span class="n">angles</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span> <span class="n">N_ANGLES</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="n">errors</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">world_to_block</span><span class="p">(</span><span class="n">cell</span><span class="o">.</span><span class="n">block_to_world</span><span class="p">(</span><span class="n">voxels</span><span class="o">.</span><span class="n">centers</span><span class="p">,</span> <span class="n">phi</span><span class="p">),</span> <span class="n">phi</span><span class="p">)</span> <span class="o">-</span> <span class="n">voxels</span><span class="o">.</span><span class="n">centers</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
@@ -8056,7 +8062,7 @@ Here we check that goin from the block frame to the world and back gives the sam
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <p>The round trip is exact up to floating point.<br/>
-The corner stays at $z = 0.215m$ and at $0.212m$ from the axis of the table, and each quarter turn moves it to the next corner around that axis, so the table only turns the block about tis own center.</p>
+The corner stays at $z = 0.215m$ and at $0.212m$ from the axis of the table, and each quarter turn moves it to the next corner around that axis, so the table only turns the block about its own center.</p>
 </div>
 </div>
 </div>
