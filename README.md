@@ -65,6 +65,7 @@ Each choice was measured in a notebook before fixing it in `src/sculptor/`.
 | Chisel tilted 30 degrees down | A horizontal chisel reaches 0.68 of the profile of the block, and from 20 degrees down it reaches 1.00 | 03 |
 | Statue 0.42 m tall | The arm reaches every cube up to 0.54 m; Swift sets the limit, with 1815 cubes at 0.42 m against 3211 at 0.54 m | 03 |
 | Top layer first, outside in | 8 of 1605 marble cubes blocked by the chisel, against 1589 in the reverse order | 03 |
+| Table turns between 4 sides | The table turns 59 times instead of 1603, with the same 8 blocked cubes; 8 sides block 86 | 04 |
 
 ## Folders
 
@@ -122,6 +123,7 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 | `00_swift_prototype` | Measures how many cubes the Swift scene can hold, to choose the cube size | about 1 min |
 | `01_cell_frames` | Checks the frames of the table and the block, and shows the cell in Swift with a pawn | under 1 min |
 | `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 2 min |
+| `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip (in progress) | under 1 min |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
