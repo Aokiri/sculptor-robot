@@ -58,7 +58,7 @@ Modules in `src/sculptor/` (they are added step by step):
 
 | Module | Content |
 |--------|---------|
-| `scene.py` | Drawing the table, the block and the chisel in Swift, and `fix_mesh_paths` so Swift loads meshes on Windows |
+| `scene.py` | Drawing the table, the block and the chisel in Swift, recording scenes as GIFs, and `fix_mesh_paths` so Swift loads meshes on Windows |
 | `cell.py` | Frames of the cell (table, block, chisel tip) and the table PID |
 | `model.py` | Loading and voxelizing the 3D model |
 | `controller.py` | Resolved-rate control of the arm |
@@ -80,7 +80,7 @@ If you prefer to keep working with the course environment, install the project i
 uv pip install --python path/to/rca -e .
 ```
 
-This adds `sculptor`, `trimesh` and `pandas` and nothing else. With `-e`, changes in `src/` are picked up without installing again (restart the kernel after a change).
+This adds `sculptor`, `trimesh` and `pandas` and nothing else (`pillow`, used for the GIFs, already comes with matplotlib). With `-e`, changes in `src/` are picked up without installing again (restart the kernel after a change).
 
 On Windows, Swift cannot load meshes out of the box. The notebooks fix this in their setup with `fix_mesh_paths()`, so there is nothing to patch by hand.
 
@@ -93,7 +93,9 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
-**Saved results.** None yet. Results that take long to compute will be saved in `results/<notebook>/`, and each notebook will have a flag in its setup to compute them again.
+**Saved results.** Results that take long to compute will be saved in `results/<notebook>/`, and each notebook will have a flag in its setup to compute them again.
+
+**Recordings.** The Swift scenes are recorded as GIFs in `results/recordings/`, named after their notebook (`01_cell_frames_turn.gif`), and shown in the notebooks and in their HTML export. A notebook records a scene only when its GIF is missing or when `RECORD = True` in its setup; otherwise it shows the saved one. Swift can only save a recording through a browser download, so recording needs the browser to save downloads to `~/Downloads` without asking (the default in Firefox); `recording` in `scene.py` takes another folder if yours is elsewhere.
 
 ## License
 
