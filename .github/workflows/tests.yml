@@ -23,6 +23,5 @@ jobs:
           version: "0.13.6"
           python-version: "3.12"
       - run: uv sync --locked
-      - run: uv pip install -r tests/requirements.txt
-      - run: uv run --no-sync python -m pytest -c tests/pytest.ini
-      - run: uv run --no-sync python -m experiments.evaluate --demo
+      - run: uv run pytest
+      - run: uv run python -m experiments.evaluate --demo

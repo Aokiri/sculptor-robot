@@ -34,7 +34,7 @@ def main() -> None:
         parser.error("Choose either --demo or a folder of logs")
 
     data_kind = "fake" if args.demo else "loaded"
-    output = args.output or Path("results") / f"giorgio_{data_kind}"
+    output = args.output or Path("results/evaluation")
     title = "FAKE LOGS - pipeline check only" if args.demo else "Loaded carving logs"
 
     if args.demo:

@@ -117,17 +117,19 @@ def test_plots_can_be_saved_without_swift(sample_log, tmp_path):
 
 
 def test_demo_saves_logs_csv_and_figures(monkeypatch, tmp_path):
-    monkeypatch.setattr("sys.argv", ["evaluate", "--demo", "--output", str(tmp_path)])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["evaluate", "--demo"])
     main()
-    paths = sorted((tmp_path / "logs").glob("*.npz"))
+    output = tmp_path / "results" / "evaluation"
+    paths = sorted((output / "logs").glob("*.npz"))
     assert len(paths) == 12
     assert len(comparison_groups([load_log(path) for path in paths])) == 4
-    with (tmp_path / "summary.csv").open(newline="", encoding="utf-8") as file:
+    with (output / "summary.csv").open(newline="", encoding="utf-8") as file:
         rows = list(csv.DictReader(file))
     assert len(rows) == 12
     assert all(row["data_kind"] == "fake" and row["statue_removed"] == "1" for row in rows)
-    assert (tmp_path / "first_run.png").is_file()
-    assert (tmp_path / "comparison.png").is_file()
+    assert (output / "first_run.png").is_file()
+    assert (output / "comparison.png").is_file()
 
 
 def test_analysis_reads_saved_logs_without_changing_them(monkeypatch, tmp_path):
