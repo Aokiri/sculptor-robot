@@ -13,7 +13,8 @@ import numpy as np
 # Chosen in notebook 00 from the step times of Swift
 CUBE_SIZE: float = 0.03
 
-# The arm reaches the whole block up to 0.54 m; 0.42 keeps the cubes in what Swift handles (notebook 03)
+# The arm reaches the whole block up to 0.54 m and Swift draws it in time; 0.42 has fewer cubes,
+# so every run is shorter (notebook 03)
 STATUE_HEIGHT: float = 0.42
 
 

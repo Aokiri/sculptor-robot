@@ -9,6 +9,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+import roboticstoolbox as rtb
 import spatialgeometry as sg
 import spatialmath as sm
 import swift
@@ -86,6 +88,41 @@ def add_block(env: swift.Swift, voxels: Voxels, cell: Cell, phi: float = 0.0,
     place_block(cubes, voxels, cell, phi)
     ids = [env.add(cube) for cube in cubes]
     return cubes, ids
+
+
+def step_times(voxels: Voxels, cell: Cell, n_steps: int = 100, dt: float = 0.05) -> dict[str, float]:
+    """Mean time of a Swift step with the robot, the table, the chisel and this block.
+
+    Measured as in notebook 00, with Swift as fast as it can go: with the scene still, with the
+    table turning 0.02 rad per step and with one cube removed per step. The browser has to show
+    the Swift tab, since a hidden tab is not drawn.
+    """
+    env = swift.Swift()
+    env.launch(realtime=False, browser=None)
+    robot = rtb.models.Panda()
+    robot.q = robot.qr
+    env.add(robot)
+    add_table(env, cell)
+    add_chisel(env, robot.fkine(robot.q, tool=cell.tip))
+    cubes, ids = add_block(env, voxels, cell)
+
+    def mean_step(turn: bool, remove: bool) -> float:
+        times, phi = [], 0.0
+        for _ in range(n_steps):
+            if turn:
+                phi += 0.02
+                place_block(cubes, voxels, cell, phi)
+            if remove:
+                env.remove(ids.pop())
+            start = time.perf_counter()
+            env.step(dt)
+            times.append(time.perf_counter() - start)
+        return float(np.mean(times))
+
+    result = {"cubes": len(cubes), "still [s]": mean_step(False, False),
+              "turning [s]": mean_step(True, False), "removing [s]": mean_step(False, True)}
+    env.close()
+    return result
 
 
 def _tip_mesh() -> Path:
