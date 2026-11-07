@@ -6,7 +6,7 @@
 
 A Panda arm carves a statue out of a marble block that sits on a rotating table. Everything is simulated, with Python and the Robotics Toolbox for the control and Swift for the 3D view.
 
-Midterm project of *Robot Control Applications* (SUPSI). Work in progress.
+Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the reach and collision checks and a first controller of the arm are done, while the carving simulation (`carving.run`) and the control of the table are not written yet. The banner and the GIFs show poses of the arm, not a full run.
 
 <table>
   <tr>
@@ -63,7 +63,7 @@ Each choice was measured in a notebook before fixing it in `src/sculptor/`.
 |--------|-------------|----------|
 | Cubes of 0.03 m | Slowest step 0.0191 s with 1500 cubes, under the 0.05 s each step stands for; 0.0556 s with the 4950 cubes of 0.02 m | 00 |
 | Chisel tilted 30 degrees down | A horizontal chisel reaches 0.68 of the profile of the block, and from 20 degrees down it reaches 1.00 | 03 |
-| Statue 0.42 m tall | The arm reaches every cube up to 0.54 m; Swift sets the limit, with 1815 cubes at 0.42 m against 3211 at 0.54 m | 03 |
+| Statue 0.42 m tall | The arm reaches every cube up to 0.54 m and Swift draws both blocks in time; 0.42 m has 1815 cubes against 3211, so every run is shorter | 03 |
 | Top layer first, outside in | 8 of 1605 marble cubes blocked by the chisel, against 1589 in the reverse order | 03 |
 | Table turns between 4 sides | The table turns 59 times instead of 1603, with the same 8 blocked cubes; 8 sides block 86 | 04 |
 
@@ -92,7 +92,7 @@ Modules in `src/sculptor/` (they are added step by step):
 
 ## How to reproduce
 
-**Environment.** The environment is the same as the course one (`rca`), plus `trimesh` for the 3D models and `pandas` for the tables. With [uv](https://docs.astral.sh/uv/):
+**Environment.** The environment is the same as the course one (`rca`), plus `trimesh` for the 3D models and `pandas` for the tables, on Python 3.12. With [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync
@@ -120,16 +120,21 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 
 | Notebook | What it does | Time |
 |----------|--------------|------|
-| `00_swift_prototype` | Measures how many cubes the Swift scene can hold, to choose the cube size | about 1 min |
+| `00_swift_prototype` | Measures how many cubes the Swift scene can hold, to choose the cube size | about 4 min |
 | `01_cell_frames` | Checks the frames of the table and the block, and shows the cell in Swift with a pawn | under 1 min |
-| `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 2 min |
+| `02_voxelization` | Turns the 3D models of the statues into cubes (in progress, not in the repository yet) | |
+| `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 4 min |
 | `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip (in progress) | under 1 min |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
 **Saved results.** Results that take long to compute will be saved in `results/<notebook>/`, and each notebook will have a flag in its setup to compute them again.
 
-**Recordings.** The Swift scenes are recorded as GIFs in `results/recordings/`, named after their notebook (`01_cell_frames_turn.gif`), and shown in the notebooks and in their HTML export. A notebook records a scene only when its GIF is missing or when `RECORD = True` in its setup; otherwise it shows the saved one. Swift can only save a recording through a browser download, so recording needs the browser to save downloads to `~/Downloads` without asking (the default in Firefox), and the Swift tab has to stay on screen, since the browser stops drawing a tab it does not show. `recording` in `scene.py` takes another folder if your downloads go elsewhere.
+**Recordings.** The Swift scenes are recorded as GIFs in `results/recordings/`, named after their notebook (`01_cell_frames_turn.gif`), and shown in the notebooks and in their HTML export. A notebook records a scene only when its GIF is missing or when `RECORD = True` in its setup; otherwise it shows the saved one.
+
+## Recording the GIFs again
+
+Only needed to record a scene again. Swift can only save a recording through a browser download, so recording needs the browser to save downloads to `~/Downloads` without asking (the default in Firefox), and the Swift tab has to stay on screen, since the browser stops drawing a tab it does not show. The same goes for the step times measured in Swift. `recording` in `scene.py` takes another folder if your downloads go elsewhere.
 
 ## License
 
