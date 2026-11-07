@@ -25,6 +25,14 @@ dependencies = [
     "pillow==12.3.0",
 ]
 
+[dependency-groups]
+dev = ["pytest==9.0.3"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "src"]
+addopts = "-ra"
+
 # Installs src/sculptor/ in the .venv, so the notebooks can do "import sculptor" directly
 [build-system]
 requires = ["hatchling"]
