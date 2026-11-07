@@ -8,8 +8,11 @@ from pathlib import Path
 
 import numpy as np
 import roboticstoolbox as rtb
+import spatialmath as sm
 
 from sculptor.cell import N_SIDES, Cell
+from sculptor.collision import Hitboxes, cube_at, touched
+from sculptor.controller import joint_move, servo
 from sculptor.model import Voxels
 
 # Time step of the simulation [s]
@@ -124,3 +127,115 @@ def solve_poses(robot: rtb.Robot, cell: Cell, voxels: Voxels, order: np.ndarray,
         q.append(solution.q)
         q0 = solution.q
     return np.array(q)
+
+def is_cut(voxels: Voxels, order: np.ndarray, n_sides: int = N_SIDES) -> np.ndarray:
+    """For each move of the order (len(order) - 1), whether the arm cuts its way to the next cube.
+
+    It cuts when both cubes are on the same side and share a face or an edge; otherwise it leaves the
+    block and comes back.
+    """
+    centers = voxels.centers[order]
+    side = side_of(centers, n_sides)
+    same_side = side[1:] == side[:-1]
+    # A face neighbour is one cube away and an edge neighbour sqrt(2); a corner one (sqrt(3)) does not count
+    distance = np.linalg.norm(centers[1:] - centers[:-1], axis=1)
+    return same_side & (distance < 1.5 * voxels.size)
+
+
+class Carver:
+    """Takes the chisel over the marble of a carving order with the controller, and counts what goes wrong.
+
+    For now the table turns at once from one side to the next.
+    """
+
+    def __init__(self, robot: rtb.Robot, cell: Cell, voxels: Voxels, order: np.ndarray, phi: np.ndarray,
+                 q_ik: np.ndarray, hitboxes: Hitboxes, seed: int = 0) -> None:
+        self._robot, self._cell, self._voxels = robot, cell, voxels
+        self._order, self._phi, self._q_ik = order, phi, q_ik
+        self._hitboxes, self._seed = hitboxes, seed
+
+    def tip_goal(self, k: int, back: float = 0.0) -> sm.SE3:
+        """Pose of the tip at the cube in position k of the order, moved back along the chisel by back."""
+        p_W = self._cell.block_to_world(self._voxels.centers[self._order[k]], self._phi[k])[0]
+        return self._cell.tip_target(p_W) * sm.SE3(0.0, 0.0, -back)
+
+    def run(self, cut: np.ndarray, posture: str = "qr", retract: float | None = None) -> dict:
+        """Goes over the whole order and returns the counts.
+
+        cut says, for each move, whether the arm cuts its way to the next cube. Otherwise it repositions:
+        with retract=None it jumps straight to the IK pose of the next cube; with a distance it backs out
+        along the chisel by retract, moves in joint space to the same distance in front of the next cube,
+        and comes in with the controller. The posture is pulled toward qr, or with posture="ik" toward the
+        IK pose of the point the tip is going to.
+        """
+        self._present = np.ones(len(self._voxels.centers), dtype=bool)
+        self._present[self._order[0]] = False
+        self._counts = {"cuts": int(cut.sum()), "repositions": int(len(cut) - cut.sum()), "steps": 0,
+                        "past a joint limit [rad]": 0.0, "largest axis error [deg]": 0.0,
+                        "tip in statue": 0, "tip in marble": 0, "hitbox contacts": 0}
+        q = self._q_ik[0]
+        for k in range(1, len(self._order)):
+            if cut[k - 1]:
+                q = self._move(q, k, 0.0, posture)
+            elif retract is None:
+                q = self._q_ik[k]
+            else:
+                q = self._move(q, k - 1, retract, posture)
+                path = joint_move(q, self._ik(k, retract), DT)
+                self._inspect(path, k, retract, joint_space=True)
+                q = self._move(path[-1], k, 0.0, posture)
+            self._present[self._order[k]] = False
+        self._counts["time [min]"] = self._counts.pop("steps") * DT / 60
+        return self._counts
+
+    def _ik(self, k: int, back: float) -> np.ndarray:
+        """IK pose with the tip at tip_goal(k, back), found next to the IK pose of the cube."""
+        if back == 0.0:
+            return self._q_ik[k]
+        target = self.tip_goal(k, back) * self._cell.tip.inv()
+        return self._robot.ikine_LM(target, q0=self._q_ik[k], seed=self._seed).q
+
+    def _move(self, q: np.ndarray, k: int, back: float, posture: str) -> np.ndarray:
+        """The controller takes the tip to tip_goal(k, back); returns the joints at the end."""
+        q_posture = self._ik(k, back) if posture == "ik" else self._robot.qr
+        path = servo(self._robot, self._cell, q, self.tip_goal(k, back), q_posture, DT)
+        self._inspect(path, k, back)
+        return path[-1]
+
+    def _inspect(self, path: np.ndarray, k: int, back: float, joint_space: bool = False) -> None:
+        """Counts what goes wrong along a path toward tip_goal(k, back).
+
+        In the moves of the controller the chisel axis is checked. In the moves in joint space, the ones
+        that cross the empty space around the block, the hitboxes are checked instead.
+        """
+        counts = self._counts
+        counts["steps"] += len(path)
+
+        # How far a joint goes past its limits
+        over = np.maximum(path - self._robot.qlim[1], self._robot.qlim[0] - path).max()
+        counts["past a joint limit [rad]"] = max(counts["past a joint limit [rad]"], float(over))
+
+        # The cubes still there, except the target, which is meant to have the tip inside it
+        others = self._present.copy()
+        others[self._order[k]] = False
+        axis_target = self.tip_goal(k, back).R[:, 2]
+
+        for q in path:
+            T = self._robot.fkine(q, tool=self._cell.tip)
+            if joint_space:
+                if self._hitboxes_touch(q, k, others):
+                    counts["hitbox contacts"] += 1
+            else:
+                angle = np.degrees(np.arccos(np.clip(T.R[:, 2] @ axis_target, -1.0, 1.0)))
+                counts["largest axis error [deg]"] = max(counts["largest axis error [deg]"], float(angle))
+
+            # Whether the point of the tip is inside one of the other cubes
+            c = cube_at(self._cell.world_to_block(T.t, self._phi[k])[0], self._voxels.centers, self._voxels.size)
+            if c >= 0 and others[c]:
+                counts["tip in statue" if self._voxels.is_statue[c] else "tip in marble"] += 1
+
+    def _hitboxes_touch(self, q: np.ndarray, k: int, cubes: np.ndarray) -> bool:
+        """Whether a hitbox touches one of the cubes (a mask over all the cubes), with the table at phi[k]."""
+        centers, radii = self._hitboxes.world(q)
+        centers = self._cell.world_to_block(centers, self._phi[k])
+        return bool(touched(centers, radii, self._voxels.centers[cubes], self._voxels.size).any())
