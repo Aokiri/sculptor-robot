@@ -124,7 +124,7 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 | `01_cell_frames` | Checks the frames of the table and the block, and shows the cell in Swift with a pawn | under 1 min |
 | `02_voxelization` | Turns the 3D models of the statues into cubes (in progress, not in the repository yet) | |
 | `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 4 min |
-| `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip (in progress) | under 1 min |
+| `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip, and finds which moves are cuts and how the arm leaves the block (in progress) | about 4 min |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
