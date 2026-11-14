@@ -128,7 +128,22 @@ def drop_interior(voxels: Voxels) -> Voxels:
     A statue cube is inside when its six neighbours are statue too; the table under
     the statue counts as covered. Fewer cubes means less work for Swift at each step.
     """
-    raise NotImplementedError
+    #raise NotImplementedError
+        # The cubes back on a 3D grid of True (statue) and False
+    index = np.round((voxels.centers - voxels.centers.min(axis=0)) / voxels.size).astype(int)
+    statue = np.zeros(index.max(axis=0) + 1, dtype=bool)
+    statue[tuple(index[voxels.is_statue].T)] = True
+
+    # One more layer all around; the one below is the table, which covers like a statue cube
+    s = np.pad(statue, 1)
+    s[:, :, 0] = True
+    # Statue on all six sides: left and right, front and back, below and above
+    covered = (s[:-2, 1:-1, 1:-1] & s[2:, 1:-1, 1:-1]
+               & s[1:-1, :-2, 1:-1] & s[1:-1, 2:, 1:-1]
+               & s[1:-1, 1:-1, :-2] & s[1:-1, 1:-1, 2:])
+
+    hidden = (statue & covered)[tuple(index.T)]
+    return Voxels(voxels.centers[~hidden], voxels.is_statue[~hidden], voxels.size)
 
 
 # Radius of a chess pawn along its height, both as fractions of the height

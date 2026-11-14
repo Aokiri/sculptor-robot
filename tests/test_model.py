@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import trimesh
 
-from sculptor.model import MODELS, STATUE_HEIGHT, Voxels, from_grid, proxy_pawn, voxelize
 
+from sculptor.model import MODELS, STATUE_HEIGHT, Voxels, drop_interior, from_grid, proxy_pawn, voxelize
 
 
 
@@ -79,6 +79,18 @@ def test_voxelized_pawn_is_close_to_the_proxy_pawn():
     n_pawn, n_proxy = np.count_nonzero(pawn.is_statue), np.count_nonzero(proxy.is_statue)
     assert abs(n_pawn - n_proxy) <= 0.1 * n_proxy
 
+
+def test_drop_interior_removes_only_the_hidden_statue_cubes():
+    # A solid 3 x 3 x 3 statue: only the middle column is hidden, its top layer is not
+    voxels = from_grid(np.ones((3, 3, 3), dtype=bool), size=0.1)
+    dropped = drop_interior(voxels)
+
+    kept = {tuple(center) for center in np.round(dropped.centers, 9)}
+    assert len(voxels.centers) - len(dropped.centers) == 2
+    assert (0.0, 0.0, 0.05) not in kept  # on the table, under the middle cube
+    assert (0.0, 0.0, 0.15) not in kept  # in the middle
+    assert (0.0, 0.0, 0.25) in kept  # on top, it can be seen
+    assert np.count_nonzero(~dropped.is_statue) == np.count_nonzero(~voxels.is_statue)
 
 
 @pytest.mark.parametrize("height, size", [(0.12, 0.03), (0.42, 0.03), (0.42, 0.06)])
