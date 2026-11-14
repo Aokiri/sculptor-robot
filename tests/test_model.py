@@ -2,8 +2,11 @@ from dataclasses import FrozenInstanceError, replace
 
 import numpy as np
 import pytest
+import trimesh
 
-from sculptor.model import Voxels, from_grid, proxy_pawn
+from sculptor.model import MODELS, STATUE_HEIGHT, Voxels, from_grid, proxy_pawn, voxelize
+
+
 
 
 def test_from_grid_adds_marble_and_keeps_coordinates():
@@ -50,6 +53,32 @@ def test_voxels_must_rest_on_the_table(sample_log):
     centers[:, 2] += 0.1
     with pytest.raises(AssertionError, match="sit on z = 0"):
         Voxels(centers, sample_log.voxels.is_statue, sample_log.voxels.size)
+
+
+def test_voxelize_fills_a_box(tmp_path):
+    # A box of 9 x 9 x 12 cm, in millimetres and away from the origin, like a downloaded model
+    box = trimesh.creation.box(extents=[90, 90, 120])
+    box.apply_translation([50, -20, 7])
+    box.export(tmp_path / "box.stl")
+
+    voxels = voxelize(tmp_path / "box.stl", height=0.12, size=0.03)
+
+    # Scaled to 12 cm and centred on the axis: 3 x 3 cubes across and 4 layers
+    statue = voxels.centers[voxels.is_statue]
+    assert len(statue) == 3 * 3 * 4
+    np.testing.assert_allclose(np.unique(statue[:, 0].round(9)), [-0.03, 0.0, 0.03])
+    np.testing.assert_allclose(np.unique(statue[:, 1].round(9)), [-0.03, 0.0, 0.03])
+    np.testing.assert_allclose(np.unique(statue[:, 2].round(9)), [0.015, 0.045, 0.075, 0.105])
+
+
+def test_voxelized_pawn_is_close_to_the_proxy_pawn():
+    pawn = voxelize(MODELS / "Chess_Pawn.stl", STATUE_HEIGHT)
+    proxy = proxy_pawn(STATUE_HEIGHT)
+    # Same block of cubes, and about the same number of statue cubes (the profiles differ a bit)
+    np.testing.assert_allclose(pawn.centers, proxy.centers)
+    n_pawn, n_proxy = np.count_nonzero(pawn.is_statue), np.count_nonzero(proxy.is_statue)
+    assert abs(n_pawn - n_proxy) <= 0.1 * n_proxy
+
 
 
 @pytest.mark.parametrize("height, size", [(0.12, 0.03), (0.42, 0.03), (0.42, 0.06)])
