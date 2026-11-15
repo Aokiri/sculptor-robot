@@ -12,12 +12,22 @@ Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the s
   <tr>
     <td width="33%"><img src="results/recordings/00_swift_prototype_removing.gif" alt="Cubes removed one by one"></td>
     <td width="33%"><img src="results/recordings/01_cell_frames_turn.gif" alt="The block turning with the table"></td>
-    <td width="33%"><img src="results/recordings/03_reachability_poses.gif" alt="The arm at the poses of the carving order"></td>
+    <td width="33%"><img src="results/recordings/02_voxelization_block.gif" alt="The pawn model filled with cubes"></td>
   </tr>
   <tr>
     <td>Cubes removed by their id (notebook 00)</td>
     <td>The block turns with the table (notebook 01)</td>
+    <td>The 3D model of the pawn turned into cubes (notebook 02)</td>
+  </tr>
+  <tr>
+    <td width="33%"><img src="results/recordings/03_reachability_poses.gif" alt="The arm at the poses of the carving order"></td>
+    <td width="33%"><img src="results/recordings/04_arm_control_carving.gif" alt="The arm carving the first side of the top layer"></td>
+    <td width="33%"></td>
+  </tr>
+  <tr>
     <td>The arm at each cube of the carving order (notebook 03)</td>
+    <td>The arm carving with the controller, and moving to the next side (notebook 04)</td>
+    <td></td>
   </tr>
 </table>
 
@@ -124,7 +134,7 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 | `01_cell_frames` | Checks the frames of the table and the block, and shows the cell in Swift with a pawn | under 1 min |
 | `02_voxelization` | Turns the 3D model of the pawn into cubes and compares the cube sizes by the detail they keep | under 1 min |
 | `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 4 min |
-| `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip, and finds which moves are cuts and how the arm leaves the block (in progress) | about 4 min |
+| `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip, and finds which moves are cuts and how the arm leaves the block | about 6 min |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
