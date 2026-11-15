@@ -159,34 +159,64 @@ class Carver:
         p_W = self._cell.block_to_world(self._voxels.centers[self._order[k]], self._phi[k])[0]
         return self._cell.tip_target(p_W) * sm.SE3(0.0, 0.0, -back)
 
-    def run(self, cut: np.ndarray, posture: str = "qr", retract: float | None = None) -> dict:
+    def run(self, cut: np.ndarray, posture: str = "qr", retract: float | None = None, record: bool = False) -> dict:
         """Goes over the whole order and returns the counts.
 
         cut says, for each move, whether the arm cuts its way to the next cube. Otherwise it repositions:
         with retract=None it jumps straight to the IK pose of the next cube; with a distance it backs out
         along the chisel by retract, moves in joint space to the same distance in front of the next cube,
         and comes in with the controller. The posture is pulled toward qr, or with posture="ik" toward the
-        IK pose of the point the tip is going to.
+        IK pose of the point the tip is going to. With record=True every step is kept for frames().
         """
         self._present = np.ones(len(self._voxels.centers), dtype=bool)
         self._present[self._order[0]] = False
         self._counts = {"cuts": int(cut.sum()), "repositions": int(len(cut) - cut.sum()), "steps": 0,
                         "past a joint limit [rad]": 0.0, "largest axis error [deg]": 0.0,
                         "tip in statue": 0, "tip in marble": 0, "hitbox contacts": 0}
+        self._frames = [(self._q_ik[0], self._phi[0], int(self._order[0]))] if record else None
         q = self._q_ik[0]
         for k in range(1, len(self._order)):
             if cut[k - 1]:
                 q = self._move(q, k, 0.0, posture)
             elif retract is None:
                 q = self._q_ik[k]
+                self._keep(q[None], self._phi[k], k)
             else:
                 q = self._move(q, k - 1, retract, posture)
+                self._turn(q, k)
                 path = joint_move(q, self._ik(k, retract), DT)
                 self._inspect(path, k, retract, joint_space=True)
+                self._keep(path, self._phi[k])
                 q = self._move(path[-1], k, 0.0, posture)
             self._present[self._order[k]] = False
         self._counts["time [min]"] = self._counts.pop("steps") * DT / 60
         return self._counts
+
+    def frames(self) -> list[tuple[np.ndarray, float, int]]:
+        """Joints, table angle and cube removed at that step (-1 for none), for every step of the last run."""
+        assert self._frames is not None, "run with record=True first"
+        return self._frames
+
+    def _keep(self, path: np.ndarray, angle: float, k: int | None = None) -> None:
+        """Keeps the steps of a path for frames(); when k is given, its cube goes at the last step."""
+        if self._frames is None:
+            return
+        for q in path:
+            self._frames.append((q, angle, -1))
+        if k is not None:
+            self._frames[-1] = (path[-1], angle, int(self._order[k]))
+
+    def _turn(self, q: np.ndarray, k: int, steps: int = 20) -> None:
+        """Keeps the table turning from phi[k - 1] to phi[k] with the arm still, for frames().
+
+        In the counts the table still turns at once; this is only so a replay shows it turning.
+        """
+        if self._frames is None or self._phi[k] == self._phi[k - 1]:
+            return
+        # The short way round, between -pi and pi
+        turn = np.angle(np.exp(1j * (self._phi[k] - self._phi[k - 1])))
+        for s in np.linspace(0.0, 1.0, steps + 1)[1:]:
+            self._frames.append((q, self._phi[k - 1] + s * turn, -1))
 
     def _ik(self, k: int, back: float) -> np.ndarray:
         """IK pose with the tip at tip_goal(k, back), found next to the IK pose of the cube."""
@@ -200,6 +230,8 @@ class Carver:
         q_posture = self._ik(k, back) if posture == "ik" else self._robot.qr
         path = servo(self._robot, self._cell, q, self.tip_goal(k, back), q_posture, DT)
         self._inspect(path, k, back)
+        # The cube goes when the tip reaches it, not when the tip backs out of the previous one
+        self._keep(path, self._phi[k], k if back == 0.0 else None)
         return path[-1]
 
     def _inspect(self, path: np.ndarray, k: int, back: float, joint_space: bool = False) -> None:
