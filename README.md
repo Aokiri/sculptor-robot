@@ -6,7 +6,7 @@
 
 A Panda arm carves a statue out of a marble block that sits on a rotating table. Everything is simulated, with Python and the Robotics Toolbox for the control and Swift for the 3D view.
 
-Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the reach and collision checks and a first controller of the arm are done, while the carving simulation (`carving.run`) and the control of the table are not written yet. The banner and the GIFs show poses of the arm, not a full run.
+Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the voxelization of a 3D model, the reach and collision checks and a first controller of the arm are done, while the carving simulation (`carving.run`) and the control of the table are not written yet. The banner and the GIFs show poses of the arm, not a full run.
 
 <table>
   <tr>
@@ -85,7 +85,7 @@ Modules in `src/sculptor/` (they are added step by step):
 |--------|---------|
 | `scene.py` | Drawing the table, the block and the chisel in Swift, recording scenes as GIFs, and `fix_mesh_paths` so Swift loads meshes on Windows |
 | `cell.py` | Frames of the cell (table, block, chisel tip), the tilt and the sizes of the chisel, and the table PID |
-| `model.py` | The block as voxels, the proxy pawn and the height of the statue |
+| `model.py` | The block as voxels, the voxelization of a 3D model (`voxelize`, `drop_interior`), the proxy pawn and the height of the statue |
 | `collision.py` | Sphere hitboxes of the arm, the hand and the chisel, and which cube the point of the chisel is in |
 | `controller.py` | Resolved-rate control of the arm |
 | `carving.py` | The carving order, the carving simulation and its saved steps |
@@ -122,7 +122,7 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 |----------|--------------|------|
 | `00_swift_prototype` | Measures how many cubes the Swift scene can hold, to choose the cube size | about 4 min |
 | `01_cell_frames` | Checks the frames of the table and the block, and shows the cell in Swift with a pawn | under 1 min |
-| `02_voxelization` | Turns the 3D models of the statues into cubes (in progress, not in the repository yet) | |
+| `02_voxelization` | Turns the 3D model of the pawn into cubes and compares the cube sizes by the detail they keep | under 1 min |
 | `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 4 min |
 | `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip, and finds which moves are cuts and how the arm leaves the block (in progress) | about 4 min |
 
