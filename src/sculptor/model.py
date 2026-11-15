@@ -10,6 +10,8 @@ from pathlib import Path
 
 import numpy as np
 
+import trimesh
+
 # Chosen in notebook 00 from the step times of Swift
 CUBE_SIZE: float = 0.03
 
@@ -59,6 +61,55 @@ def from_grid(statue: np.ndarray, size: float) -> Voxels:
                                (k + 0.5) * size])
     return Voxels(centers, statue.ravel(), size)
 
+# Folder of the 3D models of the statues
+MODELS: Path = Path(__file__).resolve().parents[2] / "models"
+
+# Moves the rays of `inside` a few micrometres sideways, so none runs exactly along an edge
+# or through a vertex (it would cross two triangles at the same point and count twice)
+RAY_SHIFT = np.array([3.1e-6, 1.7e-6])
+
+
+def place(mesh: trimesh.Trimesh, height: float) -> trimesh.Trimesh:
+    """A copy of the mesh, `height` metres tall, standing on z = 0 and centred on the z axis."""
+    mesh = mesh.copy()
+    mesh.apply_scale(height / mesh.extents[2])
+    low, high = mesh.bounds
+    mesh.apply_translation([-(low[0] + high[0]) / 2, -(low[1] + high[1]) / 2, -low[2]])
+    return mesh
+
+
+def grid_centers(mesh: trimesh.Trimesh, size: float) -> np.ndarray:
+    """Centres of a grid of cubes around a placed mesh, as an (n, n, n_z, 3) array."""
+    half = np.ceil(np.abs(mesh.bounds[:, :2]).max() / size)  # cubes from the axis to the side
+    xy = np.arange(-half, half + 1) * size  # odd number of cubes, one column on the axis
+    z = (np.arange(round(mesh.extents[2] / size)) + 0.5) * size
+    return np.stack(np.meshgrid(xy, xy, z, indexing="ij"), axis=-1)
+
+
+
+def inside(mesh: trimesh.Trimesh, centers: np.ndarray) -> np.ndarray:
+    """True for the cubes whose centre is inside the mesh.
+
+    A vertical ray goes up through each column of cubes; a centre is inside when the ray
+    crosses the surface an odd number of times above it.
+    """
+    statue = np.zeros(centers.shape[:3], dtype=bool)
+    for i, j in np.ndindex(statue.shape[:2]):
+        x, y = centers[i, j, 0, :2] + RAY_SHIFT
+        heights = crossings(mesh.triangles, x, y)
+        statue[i, j] = (heights > centers[i, j, :, 2, None]).sum(axis=1) % 2 == 1
+    return statue
+
+
+
+def crossings(triangles: np.ndarray, x: float, y: float) -> np.ndarray:
+    """Heights where the vertical line through (x, y) passes through the triangles."""
+    flat = triangles * [1, 1, 0]  # the triangles seen from above
+    point = np.tile([x, y, 0.0], (len(triangles), 1))
+    with np.errstate(divide="ignore", invalid="ignore"):  # walls seen edge-on give NaN: never hit
+        weights = trimesh.triangles.points_to_barycentric(flat, point)
+        hit = (weights >= 0).all(axis=1)
+        return (weights * triangles[:, :, 2]).sum(axis=1)[hit]
 
 def voxelize(mesh_path: Path, height: float, size: float = CUBE_SIZE) -> Voxels:
     """Voxelize a 3D model of the statue.
@@ -67,7 +118,8 @@ def voxelize(mesh_path: Path, height: float, size: float = CUBE_SIZE) -> Voxels:
     on the z axis. Returns `from_grid(statue, size)`, where `statue` is the filled grid of
     the model with layer 0 at its base.
     """
-    raise NotImplementedError
+    mesh = place(trimesh.load(mesh_path, force="mesh"), height) # np.place§
+    return from_grid(inside(mesh, grid_centers(mesh, size)), size)
 
 
 def drop_interior(voxels: Voxels) -> Voxels:
@@ -76,7 +128,22 @@ def drop_interior(voxels: Voxels) -> Voxels:
     A statue cube is inside when its six neighbours are statue too; the table under
     the statue counts as covered. Fewer cubes means less work for Swift at each step.
     """
-    raise NotImplementedError
+    #raise NotImplementedError
+        # The cubes back on a 3D grid of True (statue) and False
+    index = np.round((voxels.centers - voxels.centers.min(axis=0)) / voxels.size).astype(int)
+    statue = np.zeros(index.max(axis=0) + 1, dtype=bool)
+    statue[tuple(index[voxels.is_statue].T)] = True
+
+    # One more layer all around; the one below is the table, which covers like a statue cube
+    s = np.pad(statue, 1)
+    s[:, :, 0] = True
+    # Statue on all six sides: left and right, front and back, below and above
+    covered = (s[:-2, 1:-1, 1:-1] & s[2:, 1:-1, 1:-1]
+               & s[1:-1, :-2, 1:-1] & s[1:-1, 2:, 1:-1]
+               & s[1:-1, 1:-1, :-2] & s[1:-1, 1:-1, 2:])
+
+    hidden = (statue & covered)[tuple(index.T)]
+    return Voxels(voxels.centers[~hidden], voxels.is_statue[~hidden], voxels.size)
 
 
 # Radius of a chess pawn along its height, both as fractions of the height
