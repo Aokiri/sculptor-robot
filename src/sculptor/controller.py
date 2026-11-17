@@ -1,4 +1,4 @@
-"""Resolved-rate control of the chisel tip (lecture 6), with a posture task in the null space."""
+"""Resolved-rate control of the chisel tip, with a posture task in the null space."""
 
 import numpy as np
 import roboticstoolbox as rtb
@@ -6,7 +6,7 @@ import spatialmath as sm
 
 from sculptor.cell import Cell
 
-# Gain of the task and of the posture, the values of lecture 6 (gain 3 at 0.05 s, k0 = 2)
+# Gain of the task and of the posture
 GAIN: float = 3.0
 K0: float = 2.0
 
@@ -34,7 +34,7 @@ def rrmc(robot: rtb.Robot, cell: Cell, q: np.ndarray, target: sm.SE3, q_posture:
     q_star = gain * J_pinv @ error + P @ (k0 * (q_posture - q))
     return q_star
 
-# Gain of the joint-space moves, the 0.1 of every 0.05 s step of the course notebook 3
+# Gain of the joint-space moves: the joints cover 0.1 of what is left at every 0.05 s step
 K_JOINT: float = 2.0
 
 # The arm backs out this far along the chisel axis before it moves elsewhere [m] (notebook 04)
@@ -45,11 +45,16 @@ MAX_STEPS: int = 600
 
 
 def servo(robot: rtb.Robot, cell: Cell, q: np.ndarray, target: sm.SE3, q_posture: np.ndarray, dt: float,
-          tol: float = TOLERANCE) -> np.ndarray:
-    """Joints at every step (steps, 7) while the controller brings the tip to target."""
+          tol: float = TOLERANCE, stop_at_limits: bool = False) -> np.ndarray:
+    """Joints at every step (steps, 7) while the controller brings the tip to target.
+
+    With stop_at_limits, a joint that reaches one of its limits stays there, as on the real arm (notebook 05).
+    """
     path = []
     for _ in range(MAX_STEPS):
         q = q + rrmc(robot, cell, q, target, q_posture) * dt
+        if stop_at_limits:
+            q = np.clip(q, robot.qlim[0], robot.qlim[1])
         path.append(q)
         if np.linalg.norm(target.t - robot.fkine(q, tool=cell.tip).t) < tol:
             return np.array(path)

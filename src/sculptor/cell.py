@@ -30,6 +30,11 @@ TIP_WIDTH: float = CUBE_SIZE / 2
 CHISEL_RADIUS: float = CUBE_SIZE / 5
 
 
+def wrap_angle(angle: np.ndarray | float) -> np.ndarray | float:
+    """The same angle between -pi and pi, so a turn by it goes the short way round."""
+    return np.arctan2(np.sin(angle), np.cos(angle))
+
+
 class Cell:
     """Pose of the table top in the world and of the chisel tip on the hand."""
     
