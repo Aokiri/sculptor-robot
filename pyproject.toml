@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A simulated Panda arm that carves a statue on a rotating table"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-# Same versions as the course environment (rca), plus trimesh for the 3D models, pandas for the tables
+# Same versions as our rca environment, plus trimesh for the 3D models, pandas for the tables
 # and pillow (already in rca through matplotlib) for the GIFs
 dependencies = [
     "roboticstoolbox-python==1.4.3",

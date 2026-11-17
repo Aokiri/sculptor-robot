@@ -6,7 +6,7 @@
 
 A Panda arm carves a statue out of a marble block that sits on a rotating table. Everything is simulated, with Python and the Robotics Toolbox for the control and Swift for the 3D view.
 
-Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the voxelization of a 3D model, the reach and collision checks and a first controller of the arm are done, while the carving simulation (`carving.run`) and the control of the table are not written yet. The banner and the GIFs show poses of the arm, not a full run.
+Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the voxelization of a 3D model, the reach and collision checks, the controller of the arm, the PID of the table and the full carving of the pawn (`carving.run`, saved as a log) are done. The comparison of open and closed loop with noise, and the replay of a run with the model on top, are not written yet.
 
 <table>
   <tr>
@@ -22,12 +22,12 @@ Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the s
   <tr>
     <td width="33%"><img src="results/recordings/03_reachability_poses.gif" alt="The arm at the poses of the carving order"></td>
     <td width="33%"><img src="results/recordings/04_arm_control_carving.gif" alt="The arm carving the first side of the top layer"></td>
-    <td width="33%"></td>
+    <td width="33%"><img src="results/recordings/05_table_control_carving.gif" alt="The PID turning the table between two sides"></td>
   </tr>
   <tr>
     <td>The arm at each cube of the carving order (notebook 03)</td>
     <td>The arm carving with the controller, and moving to the next side (notebook 04)</td>
-    <td></td>
+    <td>The pawn model carved, with the PID turning the table to the next side (notebook 05)</td>
   </tr>
 </table>
 
@@ -57,9 +57,11 @@ flowchart TD
 
 $$\mathbf{p}^W = \mathbf{T}^W_{T}\,\mathbf{R}_z(\varphi)\,\mathbf{p}^B$$
 
-**4. Move the tool.** Closed-loop resolved-rate control drives the tool to the cube. The Panda has more joints than the task needs, so a second task in the null space keeps its posture from drifting:
+**4. Move the tool.** Closed-loop resolved-rate control drives the tip of the chisel to the cube. The error $\mathbf{e}$ holds the position of the tip, $\mathbf{x}^\ast - \mathbf{k}(\mathbf{q})$, and the axis of the chisel, $\mathbf{a} \times \mathbf{a}^\ast$. The Panda has more joints than the task needs, so a second task in the null space pulls the arm toward the IK pose of the target:
 
-$$\dot{\mathbf{q}} = \lambda \mathbf{J}^+ (\mathbf{x}^\ast - \mathbf{k}(\mathbf{q})) + (\mathbf{I} - \mathbf{J}^+\mathbf{J})\, k_0 (\mathbf{q}_r - \mathbf{q})$$
+$$\dot{\mathbf{q}} = \lambda \mathbf{J}^+ \mathbf{e} + (\mathbf{I} - \mathbf{J}^+\mathbf{J})\, k_0 (\mathbf{q}_{IK} - \mathbf{q})$$
+
+The arm only cuts from a cube to its neighbour; for any other move it backs out of the block, moves in joint space and comes back in.
 
 **5. Remove and save.** When the point of the chisel is inside the cube, the cube is removed and the step is saved (joints, table angle, removed cubes).
 
@@ -71,11 +73,17 @@ Each choice was measured in a notebook before fixing it in `src/sculptor/`.
 
 | Choice | Measurement | Notebook |
 |--------|-------------|----------|
-| Cubes of 0.03 m | Slowest step 0.0191 s with 1500 cubes, under the 0.05 s each step stands for; 0.0556 s with the 4950 cubes of 0.02 m | 00 |
+| Cubes of 0.03 m | Slowest step 0.0186 s with 1500 cubes, under the 0.05 s each step stands for; 0.0584 s with the 4950 cubes of 0.02 m | 00 |
+| A cube is statue when its center is inside the model (one vertical ray per column, odd crossings) | The pawn model gives 208 statue cubes against the 210 of the proxy pawn, in the same block of 11 x 11 x 15 | 02 |
+| 3 cm cubes keep enough of the pawn | 87.3 % of the pawn kept with 12.1 % extra marble; 1.5 cm keep 94.7 % but need 10469 cubes in Swift instead of 1815 | 02 |
 | Chisel tilted 30 degrees down | A horizontal chisel reaches 0.68 of the profile of the block, and from 20 degrees down it reaches 1.00 | 03 |
 | Statue 0.42 m tall | The arm reaches every cube up to 0.54 m and Swift draws both blocks in time; 0.42 m has 1815 cubes against 3211, so every run is shorter | 03 |
 | Top layer first, outside in | 8 of 1605 marble cubes blocked by the chisel, against 1589 in the reverse order | 03 |
 | Table turns between 4 sides | The table turns 59 times instead of 1603, with the same 8 blocked cubes; 8 sides block 86 | 04 |
+| Axis of the chisel in the task | The chisel stays within 0.87 degrees of its direction, against 35.24 with the position only | 04 |
+| Cuts only between neighbours, backing out 0.09 m otherwise | The tip spends 364 steps in the statue when every move is a cut, and none with the rule; backing out 0.09 m with the posture toward the IK pose leaves no hitbox contact | 04 |
+| PID on the table, $k_p = 40$, $k_d = 20$, $k_i = 40$ | With a constant disturbance the PD stops 2.86 degrees past the goal; the PID stops on it from 5.4 s, the least past the goal of the gains that stop | 05 |
+| Joints stop at their limits | On the pawn model joint 7 went 0.575 rad past its limit; stopped there, nothing else in the carving changes | 05 |
 
 ## Folders
 
@@ -85,7 +93,9 @@ sculptor-robot/
 ├── notebooks/      # one notebook per step, run in order
 ├── html/           # the notebooks exported to HTML, to read them without Python
 ├── models/         # 3D models of the statues, and the tip of the chisel
-├── results/        # results that take long to compute, one folder per notebook, and the recordings
+├── results/        # results the next notebooks read, one folder per notebook, and the recordings
+├── tests/          # tests of src/sculptor (uv run pytest)
+├── experiments/    # evaluation of saved runs (see experiments/README.md)
 └── docs/           # report, slides, images
 ```
 
@@ -94,15 +104,17 @@ Modules in `src/sculptor/` (they are added step by step):
 | Module | Content |
 |--------|---------|
 | `scene.py` | Drawing the table, the block and the chisel in Swift, recording scenes as GIFs, and `fix_mesh_paths` so Swift loads meshes on Windows |
-| `cell.py` | Frames of the cell (table, block, chisel tip), the tilt and the sizes of the chisel, and the table PID |
+| `cell.py` | Frames of the cell (table, block, chisel tip), the tilt and the sizes of the chisel, the angles of the sides and `wrap_angle` |
 | `model.py` | The block as voxels, the voxelization of a 3D model (`voxelize`, `drop_interior`), the proxy pawn and the height of the statue |
 | `collision.py` | Sphere hitboxes of the arm, the hand and the chisel, and which cube the point of the chisel is in |
-| `controller.py` | Resolved-rate control of the arm |
-| `carving.py` | The carving order, the carving simulation and its saved steps |
+| `controller.py` | Resolved-rate control of the chisel tip, the moves in joint space and the stop at the joint limits |
+| `table.py` | The turning table (an inertia with a constant disturbance) and the PID on its angle, with its gains |
+| `carving.py` | The carving order, the cuts and repositions, the carving simulation (`Carver`, `make_carver`, `run`) and its saved steps (`Log`) |
+| `evaluation.py` | Counts and plots from a saved run |
 
 ## How to reproduce
 
-**Environment.** The environment is the same as the course one (`rca`), plus `trimesh` for the 3D models and `pandas` for the tables, on Python 3.12. With [uv](https://docs.astral.sh/uv/):
+**Environment.** The project runs on Python 3.12 with the Robotics Toolbox, Swift and spatialmath (the versions of our `rca` environment), plus `trimesh` for the 3D models and `pandas` for the tables. With [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync
@@ -116,7 +128,7 @@ uv run python -m ipykernel install --sys-prefix --name sculptor-robot --display-
 
 In VS Code it then shows up in **Select Kernel** → **Jupyter Kernel**.
 
-If you prefer to keep working with the course environment, install the project into it instead (the path is where your `rca` venv lives):
+If you prefer to keep working with the `rca` environment, install the project into it instead (the path is where your `rca` venv lives):
 
 ```bash
 uv pip install --python path/to/rca -e .
@@ -135,10 +147,11 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 | `02_voxelization` | Turns the 3D model of the pawn into cubes and compares the cube sizes by the detail they keep | under 1 min |
 | `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 4 min |
 | `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip, and finds which moves are cuts and how the arm leaves the block | about 6 min |
+| `05_table_control` | Tunes the PID of the table, adds it to the carving, carves the pawn model with the joints stopped at their limits and saves the log of the run | about 4 min |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
-**Saved results.** Results that take long to compute will be saved in `results/<notebook>/`, and each notebook will have a flag in its setup to compute them again.
+**Saved results.** Results that the next notebooks read are saved in `results/<notebook>/`. `05_table_control` saves the log of the carving of the pawn model in `results/05_table_control/carving_pawn.npz` (about 4 MB; every step of the joints, the table angle, the target cube and the tip error, and when each cube was removed), and writes it again every time it runs.
 
 **Recordings.** The Swift scenes are recorded as GIFs in `results/recordings/`, named after their notebook (`01_cell_frames_turn.gif`), and shown in the notebooks and in their HTML export. A notebook records a scene only when its GIF is missing or when `RECORD = True` in its setup; otherwise it shows the saved one.
 
