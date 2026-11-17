@@ -6,7 +6,7 @@
 
 A Panda arm carves a statue out of a marble block that sits on a rotating table. Everything is simulated, with Python and the Robotics Toolbox for the control and Swift for the 3D view.
 
-Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the voxelization of a 3D model, the reach and collision checks, the controller of the arm, the PID of the table and the full carving of the pawn (`carving.run`, saved as a log) are done. The comparison of open and closed loop with noise, and the replay of a run with the model on top, are not written yet.
+Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the voxelization of a 3D model, the reach and collision checks, the controller of the arm, the PID of the table, the full carving of the pawn (`carving.run`, saved as a log) and its replay with the model on top are done. The comparison of open and closed loop with noise is not written yet.
 
 <table>
   <tr>
@@ -28,6 +28,16 @@ Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the s
     <td>The arm at each cube of the carving order (notebook 03)</td>
     <td>The arm carving with the controller, and moving to the next side (notebook 04)</td>
     <td>The pawn model carved, with the PID turning the table to the next side (notebook 05)</td>
+  </tr>
+  <tr>
+    <td width="33%"><img src="results/recordings/07_replay_carving.gif" alt="The whole carving played back from its log"></td>
+    <td width="33%"><img src="results/recordings/07_replay_model.gif" alt="The carved pawn with the model on top"></td>
+    <td width="33%"></td>
+  </tr>
+  <tr>
+    <td>The whole carving played back from its log (notebook 07)</td>
+    <td>The carved pawn with the 3D model on top (notebook 07)</td>
+    <td></td>
   </tr>
 </table>
 
@@ -103,7 +113,7 @@ Modules in `src/sculptor/` (they are added step by step):
 
 | Module | Content |
 |--------|---------|
-| `scene.py` | Drawing the table, the block and the chisel in Swift, recording scenes as GIFs, and `fix_mesh_paths` so Swift loads meshes on Windows |
+| `scene.py` | Drawing the table, the block, the chisel and the 3D model in Swift, replaying a saved run (`replay`), recording scenes as GIFs, and `fix_mesh_paths` so Swift loads meshes on Windows |
 | `cell.py` | Frames of the cell (table, block, chisel tip), the tilt and the sizes of the chisel, the angles of the sides and `wrap_angle` |
 | `model.py` | The block as voxels, the voxelization of a 3D model (`voxelize`, `drop_interior`), the proxy pawn and the height of the statue |
 | `collision.py` | Sphere hitboxes of the arm, the hand and the chisel, and which cube the point of the chisel is in |
@@ -148,6 +158,7 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 | `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 4 min |
 | `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip, and finds which moves are cuts and how the arm leaves the block | about 6 min |
 | `05_table_control` | Tunes the PID of the table, adds it to the carving, carves the pawn model with the joints stopped at their limits and saves the log of the run | about 4 min |
+| `07_replay` | Reads the log of 05, compares what is left of the block with the model, and plays the carving back in Swift with the model on top (needs the log of 05) | under 1 min, about 1.5 min when it records the GIFs |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
