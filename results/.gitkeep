@@ -1,3 +1,0 @@
-# Results that take long to compute, one folder per notebook (e.g. results/06_carving/).
-# They are committed so the notebooks can load them instead of recomputing;
-# each notebook has a flag in its setup to compute them again.
