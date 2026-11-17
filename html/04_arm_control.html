@@ -7858,7 +7858,7 @@ a.anchor-link {
     <span class="n">solve_poses</span><span class="p">,</span>
     <span class="n">table_angles</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">N_SIDES</span><span class="p">,</span> <span class="n">Cell</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">N_SIDES</span><span class="p">,</span> <span class="n">Cell</span><span class="p">,</span> <span class="n">wrap_angle</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.collision</span><span class="w"> </span><span class="kn">import</span> <span class="n">Hitboxes</span><span class="p">,</span> <span class="n">cube_at</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.controller</span><span class="w"> </span><span class="kn">import</span> <span class="n">RETRACT</span><span class="p">,</span> <span class="n">TOLERANCE</span><span class="p">,</span> <span class="n">rrmc</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sculptor.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">STATUE_HEIGHT</span><span class="p">,</span> <span class="n">proxy_pawn</span>
@@ -7938,7 +7938,7 @@ a.anchor-link {
 <span class="w">    </span><span class="sd">"""Blocked cubes and how much the table and the arm move along an order."""</span>
     <span class="n">q</span> <span class="o">=</span> <span class="n">solve_poses</span><span class="p">(</span><span class="n">panda</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">voxels</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">IK_SEED</span><span class="p">)</span>
     <span class="c1"># The table can turn either way, so each change of angle takes the short way, between -pi and pi</span>
-    <span class="n">turns</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">angle</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">phi</span><span class="p">)))</span> <span class="c1"># memo: j is the imaginary number i (sqrt(-1))</span>
+    <span class="n">turns</span> <span class="o">=</span> <span class="n">wrap_angle</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">phi</span><span class="p">))</span>
     <span class="k">return</span> <span class="p">{</span><span class="s2">"blocked"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">hitboxes</span><span class="o">.</span><span class="n">blocked</span><span class="p">(</span><span class="n">voxels</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span> <span class="n">q</span><span class="p">)),</span>
             <span class="s2">"table turns"</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">turns</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))),</span>
             <span class="s2">"table path [rad]"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">turns</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span>
@@ -8074,15 +8074,15 @@ With <strong>4 sides</strong> the table turns $59$ times and covers $92.7$ rad, 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The controller is the closed-loop resolved-rate motion control of lecture 6 (Robot Controls), applied to the chisel tip, with the posture task in the null space.</p>
+<p>The controller is closed-loop resolved-rate motion control of the chisel tip, with the posture task in the null space.</p>
 <p>$$\dot{\mathbf{q}} = \lambda \mathbf{J}^+ (\mathbf{x}^\ast - \mathbf{k}(\mathbf{q})) + (\mathbf{I} - \mathbf{J}^+\mathbf{J})\, k_0 (\mathbf{q}_r - \mathbf{q})$$</p>
-<p>In the lecture the task is only the position. Here the direction of the chisel matters too, since the tilt of notebook 03 is what lets it reach every cube without hitting the block. We compare three versions:</p>
+<p>In its basic form the task is only the position. Here the direction of the chisel matters too, since the tilt of notebook 03 is what lets it reach every cube without hitting the block. We compare three versions:</p>
 <ul>
-<li>position only, as in the lecture;</li>
+<li>position only;</li>
 <li>position only, with the IK pose of the target cube as posture reference instead of $\mathbf{q}_r$, so the posture task also pulls the chisel to the right direction;</li>
 <li>position and axis of the chisel. If $\mathbf{a}$ is the current axis and $\mathbf{a}^\ast$ the target one, $\mathbf{a} \times \mathbf{a}^\ast$ is the rotation that brings one onto the other, so it plays the role of $\mathbf{x}^\ast - \mathbf{k}(\mathbf{q})$ for the direction. It goes under the position error, with the full Jacobian of the tip (6 x 7).</li>
 </ul>
-<p>The gains are the ones of lecture 6 ($\lambda = 3$, $k_0 = 2$, in <code>src/sculptor/controller.py</code>), and the next target is taken when the tip is within 1 mm of the current one. The tip goes over the cubes of one side in two layers, the top one and the one in the middle, with the table still.</p>
+<p>The gains are $\lambda = 3$ and $k_0 = 2$ (in <code>src/sculptor/controller.py</code>), and the next target is taken when the tip is within 1 mm of the current one. The tip goes over the cubes of one side in two layers, the top one and the one in the middle, with the table still.</p>
 </div>
 </div>
 </div>
@@ -8668,7 +8668,7 @@ With the rule they become repositions, together with the other jumps between row
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>A reposition takes the arm out of the block and back in. The tip backs out along the chisel by a distance $d$, the way it came in. A move in joint space takes the arm to the IK pose with the tip $d$ in front of the next cube; it is the proportional move of the course notebook 3, $\mathbf{q} \leftarrow \mathbf{q} + 0.1\,(\mathbf{q}_{goal} - \mathbf{q})$ every 0.05 s (<code>joint_move</code> in <code>src/sculptor/controller.py</code>). Then the controller brings the tip in.</p>
+<p>A reposition takes the arm out of the block and back in. The tip backs out along the chisel by a distance $d$, the way it came in. A move in joint space takes the arm to the IK pose with the tip $d$ in front of the next cube; it is a proportional move, $\mathbf{q} \leftarrow \mathbf{q} + 0.1\,(\mathbf{q}_{goal} - \mathbf{q})$ every 0.05 s (<code>joint_move</code> in <code>src/sculptor/controller.py</code>). Then the controller brings the tip in.</p>
 <p>The move in joint space is the one that crosses the space around the block, so that is where the hitboxes are checked against the cubes still there. We try the posture toward $\mathbf{q}_r$ of section 2, then the posture toward the IK pose of the point the tip goes to, with two distances.</p>
 </div>
 </div>
