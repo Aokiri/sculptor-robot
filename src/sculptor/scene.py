@@ -18,6 +18,7 @@ import trimesh
 from IPython.display import HTML
 from PIL import Image
 
+from sculptor.carving import Log
 from sculptor.cell import CHISEL_LENGTH, CHISEL_RADIUS, TIP_LENGTH, TIP_WIDTH, Cell
 from sculptor.model import Voxels
 
@@ -123,6 +124,51 @@ def step_times(voxels: Voxels, cell: Cell, n_steps: int = 100, dt: float = 0.05)
               "turning [s]": mean_step(True, False), "removing [s]": mean_step(False, True)}
     env.close()
     return result
+
+
+def add_model(env: swift.Swift, path: Path, height: float, cell: Cell, phi: float = 0.0,
+              rgba: list[float] | None = None) -> tuple[sg.Mesh, sm.SE3]:
+    """The 3D model of the statue, see-through, where voxelize places it: height tall, centred on the
+    axis of the table and standing on it.
+
+    Returns the mesh and its pose in the block frame, so it can turn with the table:
+    model.T = cell.block_pose(phi) * offset. The default color is the statue, see-through.
+    """
+    mesh = trimesh.load(path, force="mesh")
+    scale = height / mesh.extents[2]
+    low, high = mesh.bounds * scale
+    offset = sm.SE3(-(low[0] + high[0]) / 2, -(low[1] + high[1]) / 2, -low[2])
+    model = sg.Mesh(str(Path(path).resolve()), scale=[scale] * 3, pose=cell.block_pose(phi) * offset,
+                    color=rgba if rgba is not None else [*STATUE[:3], 0.35])
+    env.add(model)
+    return model, offset
+
+
+def replay(env: swift.Swift, log: Log, cubes: list[sg.Cuboid], ids: list[int], robot: rtb.Robot,
+           chisel: "Chisel", cell: Cell, every: int = 1) -> None:
+    """Play a carving log in Swift, drawing one step in every `every`.
+
+    Every cube still goes at the step the log removed it, also on the steps that are not drawn.
+    """
+    # The cubes removed at each step
+    removals: dict[int, list[int]] = {}
+    for cube, step in enumerate(log.removed_at):
+        if step >= 0:
+            removals.setdefault(int(step), []).append(cube)
+
+    last = len(log.t) - 1
+    angle_shown = None
+    for step in range(len(log.t)):
+        for cube in removals.get(step, []):
+            env.remove(ids[cube])
+        if step % every != 0 and step != last:
+            continue
+        if log.phi[step] != angle_shown:
+            place_block(cubes, log.voxels, cell, log.phi[step])
+            angle_shown = log.phi[step]
+        robot.q = log.q[step]
+        place_chisel(chisel, robot.fkine(log.q[step], tool=cell.tip))
+        env.step(0.05)
 
 
 def _tip_mesh() -> Path:
