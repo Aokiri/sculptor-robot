@@ -12,15 +12,16 @@ from sculptor.evaluation import comparison_groups, plot_comparison, plot_run, su
 
 
 def experiment_settings(noise_values=(0.0, 0.001, 0.005), seeds=range(5)) -> list[Settings]:
-    """The same seeds for open/closed loop and posture off/on."""
+    """Build the four control and posture combinations for every noise level and seed."""
     settings = []
     seeds = tuple(seeds)
     for noise in noise_values:
         for closed_loop in (False, True):
             for posture_task in (False, True):
                 for seed in seeds:
-                    settings.append(Settings(closed_loop=closed_loop, posture_task=posture_task,
-                                             noise_std=noise, seed=seed))
+                    setting = Settings(closed_loop=closed_loop, posture_task=posture_task,
+                                       noise_std=noise, seed=seed)
+                    settings.append(setting)
     return settings
 
 
@@ -30,26 +31,36 @@ def main() -> None:
     parser.add_argument("--demo", action="store_true", help="Generate clearly labelled fake logs")
     parser.add_argument("--output", type=Path, help="Folder for the CSV and figures")
     args = parser.parse_args()
-    if args.demo == (args.logs is not None):
+    both_inputs = args.demo and args.logs is not None
+    no_input = not args.demo and args.logs is None
+    if both_inputs or no_input:
         parser.error("Choose either --demo or a folder of logs")
 
-    data_kind = "fake" if args.demo else "loaded"
     output = args.output or Path("results/evaluation")
-    title = "FAKE LOGS - pipeline check only" if args.demo else "Loaded carving logs"
-
+    logs = []
+    names = []
     if args.demo:
+        data_kind = "fake"
+        title = "FAKE LOGS - pipeline check only"
         settings = experiment_settings(noise_values=(0.001,), seeds=range(3))
-        logs = [make_fake_log(setting) for setting in settings]
-        names = [f"fake_{i:02d}.npz" for i in range(len(logs))]
+        for i, setting in enumerate(settings):
+            logs.append(make_fake_log(setting))
+            names.append(f"fake_{i:02d}.npz")
     else:
+        data_kind = "loaded"
+        title = "Loaded carving logs"
         paths = sorted(args.logs.glob("*.npz"))
         if not paths:
             parser.error(f"No .npz logs found in {args.logs}")
-        logs = [load_log(path) for path in paths]
-        names = [str(path) for path in paths]
+        for path in paths:
+            logs.append(load_log(path))
+            names.append(str(path))
 
-    rows = [{"source": name, "data_kind": data_kind, **summarize(log)}
-            for name, log in zip(names, logs)]
+    rows = []
+    for name, log in zip(names, logs):
+        row = {"source": name, "data_kind": data_kind}
+        row.update(summarize(log))
+        rows.append(row)
     if len(logs) > 1:
         comparison_groups(logs)
 

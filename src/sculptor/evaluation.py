@@ -30,11 +30,12 @@ def arrival_steps(log: Log) -> np.ndarray:
     """Ordered endpoints of actual moves. The setup cube at step zero has no approach."""
     if log.attempt_end_step is None:
         raise ValueError("This log has no recorded attempt endpoints")
-    return np.sort(log.attempt_end_step[log.attempt_end_step > 0])
+    movement_ends = log.attempt_end_step[log.attempt_end_step > 0]
+    return np.sort(movement_ends)
 
 
 def summarize(log: Log) -> dict:
-    """One row of measurements; fractions use the original cube counts."""
+    """Summarize one run. Each fraction uses the original number of cubes of that material."""
     check_log(log)
     removed = log.removed_at >= 0
     statue = log.voxels.is_statue
@@ -54,9 +55,14 @@ def summarize(log: Log) -> dict:
         "marble_remaining": n_marble - marble_removed,
         "marble_removed_fraction": marble_removed / n_marble,
         "log_span_s": float(log.t[-1] - log.t[0]),
-        "tip_rmse_m": float(np.sqrt(np.mean(error**2))) if len(error) else np.nan,
-        "tip_max_error_m": float(np.max(error)) if len(error) else np.nan,
+        "tip_rmse_m": np.nan,
+        "tip_max_error_m": np.nan,
     }
+    if len(error):
+        mean_squared_error = np.mean(error**2)
+        row["tip_rmse_m"] = float(np.sqrt(mean_squared_error))
+        row["tip_max_error_m"] = float(np.max(error))
+
     if log.attempt_end_step is not None:
         ends = arrival_steps(log)
         arrival = log.tip_error[ends]
@@ -64,7 +70,8 @@ def summarize(log: Log) -> dict:
         row["within_1mm"] = int(np.count_nonzero(arrival <= TOLERANCE))
         row["arrival_rmse_mm"] = np.nan
         if len(arrival):
-            row["arrival_rmse_mm"] = float(1000 * np.sqrt(np.mean(arrival**2)))
+            mean_squared_arrival_error = np.mean(arrival**2)
+            row["arrival_rmse_mm"] = float(1000 * np.sqrt(mean_squared_arrival_error))
         if np.any(log.attempt_end_step == 0):
             row["setup_cube"] = int(log.target[0])
             row["setup_error_mm"] = float(1000 * log.tip_error[0])
@@ -77,8 +84,9 @@ def removal_history(log: Log) -> tuple[np.ndarray, np.ndarray]:
     counts = []
     for mask in (log.voxels.is_statue, ~log.voxels.is_statue):
         steps = log.removed_at[mask]
-        # -1 means never removed; it must not become an index of the last step.
-        events = np.bincount(steps[steps >= 0], minlength=len(log.t))
+        # A step of -1 marks a cube that was never removed.
+        removal_steps = steps[steps >= 0]
+        events = np.bincount(removal_steps, minlength=len(log.t))
         counts.append(np.cumsum(events))
     return counts[0], counts[1]
 
@@ -93,7 +101,7 @@ def plot_run(log: Log, title: str = "Carving log"):
     axes[0, 0].set_ylabel("Cubes")
     axes[0, 0].legend()
 
-    # NaN leaves a gap while the table turns: no target is not zero error.
+    # NaN leaves a gap while the table turns because the tip has no target.
     axes[0, 1].plot(log.t, 1000 * log.tip_error, ".-")
     axes[0, 1].set_ylabel("Tip error [mm]")
 
@@ -101,7 +109,10 @@ def plot_run(log: Log, title: str = "Carving log"):
     axes[1, 0].set_ylabel("Table angle [rad]")
     axes[1, 1].plot(log.t, log.q)
     axes[1, 1].set_ylabel("Joint position [rad]")
-    axes[1, 1].legend([f"q{i + 1}" for i in range(log.q.shape[1])], ncol=4)
+    joint_labels = []
+    for i in range(log.q.shape[1]):
+        joint_labels.append(f"q{i + 1}")
+    axes[1, 1].legend(joint_labels, ncol=4)
 
     for ax in axes.flat:
         ax.set_xlabel("Time [s]")
@@ -109,6 +120,14 @@ def plot_run(log: Log, title: str = "Carving log"):
     fig.suptitle(title)
     fig.tight_layout()
     return fig
+
+
+def _noise_levels(groups: dict) -> list[float]:
+    """Return the distinct noise levels in increasing order."""
+    levels = set()
+    for key in groups:
+        levels.add(key[0])
+    return sorted(levels)
 
 
 def comparison_groups(logs: list[Log]) -> dict:
@@ -132,7 +151,7 @@ def comparison_groups(logs: list[Log]) -> dict:
             raise ValueError("Duplicate seed in the same experiment condition")
         group[settings.seed] = summarize(log)
 
-    for noise in sorted({key[0] for key in groups}):
+    for noise in _noise_levels(groups):
         seed_sets = []
         for closed_loop in (False, True):
             for posture_task in (False, True):
@@ -140,15 +159,16 @@ def comparison_groups(logs: list[Log]) -> dict:
                 if key not in groups:
                     raise ValueError("Each noise level needs all four control/posture conditions")
                 seed_sets.append(set(groups[key]))
-        if any(seeds != seed_sets[0] for seeds in seed_sets):
-            raise ValueError("Use the same seeds in all four conditions")
+        for seeds in seed_sets:
+            if seeds != seed_sets[0]:
+                raise ValueError("Use the same seeds in all four conditions")
     return groups
 
 
 def plot_comparison(logs: list[Log], title: str = "Carving comparison"):
     """Show every run, the mean and sample standard deviation across seeds."""
     groups = comparison_groups(logs)
-    noise_values = sorted({key[0] for key in groups})
+    noise_values = _noise_levels(groups)
     conditions = [(False, False), (False, True), (True, False), (True, True)]
     labels = ["Open\nposture off", "Open\nposture on",
               "Closed\nposture off", "Closed\nposture on"]
@@ -160,8 +180,13 @@ def plot_comparison(logs: list[Log], title: str = "Carving comparison"):
             ax = axes[row, column]
             for x, (closed_loop, posture_task) in enumerate(conditions):
                 group = groups[(noise, closed_loop, posture_task)]
-                values = [group[seed][metric] for seed in sorted(group)]
-                spread = np.std(values, ddof=1) if len(values) > 1 else 0.0
+                values = []
+                for seed in sorted(group):
+                    values.append(group[seed][metric])
+
+                spread = 0.0
+                if len(values) > 1:
+                    spread = np.std(values, ddof=1)
                 ax.plot(np.full(len(values), x), values, "o", alpha=0.5, color="C0")
                 ax.errorbar(x, np.mean(values), yerr=spread, fmt="ks", capsize=5)
             ax.set_xticks(range(4), labels)

@@ -51,7 +51,8 @@ def test_tip_accuracy_at_arrival_and_first_entry_at_removal(short_run: tuple[Car
     panda, cell = rtb.models.Panda(), Cell()
     first = np.full(len(log.voxels.centers), -1)
     for step, q in enumerate(log.q):
-        point = cell.world_to_block(panda.fkine(q, tool=cell.tip).t, log.phi[step])[0]
+        tip_world = panda.fkine(q, tool=cell.tip).t
+        point = cell.world_to_block(tip_world, log.phi[step])[0]
         cube = cube_at(point, log.voxels.centers, log.voxels.size)
         if cube >= 0 and first[cube] == -1:
             first[cube] = step
@@ -131,7 +132,8 @@ def test_matched_noise_on_active_steps_only(short_plan: CarvingPlan, closed: boo
             elif closed:
                 velocity = controller.rrmc(panda, cell, q, move.tip_goal, move.q_ref, k0=k0)
             noise = rng.normal(0, setting.noise_std, 7)
-            expected = np.clip(q + DT * velocity + noise, panda.qlim[0], panda.qlim[1])
+            noisy_q = q + DT * velocity + noise
+            expected = np.clip(noisy_q, panda.qlim[0], panda.qlim[1])
             np.testing.assert_allclose(log.q[step], expected, rtol=0, atol=1e-13)
 
 
@@ -145,9 +147,17 @@ def test_table_can_remove_statue_and_other_marble_while_a_target_stays_unreached
     # The stationary tip sees two new cubes during the turn, one of them on two consecutive samples.
     phi = np.array([0, 0, np.pi / 2, np.pi / 2, np.pi])
     target = np.array([0, 3, -1, -1, -1])
-    nominal = Log(np.arange(5) * DT, np.tile(q, (5, 1)), phi, target,
-                  np.array([0, 0.06, np.nan, np.nan, np.nan]), np.full(4, -1),
-                  voxels, Settings(), np.array([0, -1, -1, 1]))
+    nominal = Log(
+        t=np.arange(5) * DT,
+        q=np.tile(q, (5, 1)),
+        phi=phi,
+        target=target,
+        tip_error=np.array([0, 0.06, np.nan, np.nan, np.nan]),
+        removed_at=np.full(4, -1),
+        voxels=voxels,
+        settings=Settings(),
+        attempt_end_step=np.array([0, -1, -1, 1]),
+    )
     plan = CarvingPlan(nominal, [ArmMove(1, 2, q, None)], cell)
     log = plan.run(Settings())
     np.testing.assert_array_equal(log.removed_at, [0, 2, 4, -1])
@@ -171,8 +181,16 @@ def test_open_loop_keeps_the_command_before_the_joint_stop(short_plan: CarvingPl
     goal[-1] += 0.2
     base = short_plan.nominal
     target = np.full(3, base.target[0])
-    log = Log(np.arange(3) * DT, np.tile(q, (3, 1)), np.full(3, base.phi[0]), target,
-              np.zeros(3), np.full(len(base.voxels.centers), -1), base.voxels, Settings())
+    log = Log(
+        t=np.arange(3) * DT,
+        q=np.tile(q, (3, 1)),
+        phi=np.full(3, base.phi[0]),
+        target=target,
+        tip_error=np.zeros(3),
+        removed_at=np.full(len(base.voxels.centers), -1),
+        voxels=base.voxels,
+        settings=Settings(),
+    )
     plan = CarvingPlan(log, [ArmMove(1, 3, goal, None)], short_plan.cell)
     command = plan.nominal_commands(True)
     assert command[1, -1] == pytest.approx(0.4)

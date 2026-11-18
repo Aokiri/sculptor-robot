@@ -55,9 +55,11 @@ class Log:
         assert np.all(np.isnan(self.tip_error) == (self.target == -1)), "tip_error is NaN only without a target"
         if self.attempt_end_step is not None:
             ends = self.attempt_end_step
-            assert ends.shape == self.removed_at.shape and np.issubdtype(ends.dtype, np.integer), "invalid attempt_end_step"
+            assert ends.shape == self.removed_at.shape, "invalid attempt_end_step"
+            assert np.issubdtype(ends.dtype, np.integer), "invalid attempt_end_step"
             assert np.all((ends >= -1) & (ends < n_steps)), "attempt_end_step must be a step or -1"
             cubes = np.flatnonzero(ends >= 0)
+            # Each attempted cube must still be the target at its recorded endpoint.
             assert np.array_equal(self.target[ends[cubes]], cubes), "attempt endpoint must name its target"
             ends.flags.writeable = False
         for array in (self.t, self.q, self.phi, self.target, self.tip_error, self.removed_at):
@@ -257,8 +259,17 @@ class CarvingPlan:
             cube = nominal.target[step]
             if cube >= 0:
                 error[step] = np.linalg.norm(point - voxels.centers[cube])
-        return Log(nominal.t, q, nominal.phi, nominal.target, error, removed_at,
-                   voxels, settings, nominal.attempt_end_step)
+        return Log(
+            t=nominal.t,
+            q=q,
+            phi=nominal.phi,
+            target=nominal.target,
+            tip_error=error,
+            removed_at=removed_at,
+            voxels=voxels,
+            settings=settings,
+            attempt_end_step=nominal.attempt_end_step,
+        )
 
 
 class Carver:
@@ -360,8 +371,17 @@ class Carver:
         phi = np.array([frame[1] for frame in self._frames])
         target = np.array(self._targets)
 
-        return Log(np.arange(len(q)) * DT, q, phi, target, np.array(self._errors),
-                   self._removed_at, self._voxels, settings, self._attempt_end_step)
+        return Log(
+            t=np.arange(len(q)) * DT,
+            q=q,
+            phi=phi,
+            target=target,
+            tip_error=np.array(self._errors),
+            removed_at=self._removed_at,
+            voxels=self._voxels,
+            settings=settings,
+            attempt_end_step=self._attempt_end_step,
+        )
 
     def comparison_plan(self) -> CarvingPlan:
         """Time each move using the noise-free, posture-on controller and PID of notebook 05."""

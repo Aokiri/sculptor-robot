@@ -1,4 +1,4 @@
-"""Small hand-written data for checking the analysis before simulation is ready."""
+"""Hand-counted example for testing the carving metrics and plots."""
 
 import numpy as np
 
@@ -9,8 +9,8 @@ from sculptor.model import Voxels
 def make_fake_log(settings: Settings | None = None) -> Log:
     """Six cubes, one damaged statue cube and one marble cube left over.
 
-    The arrays are illustrative and are not a robot trajectory. Changing settings
-    only changes the labels; no controller behaviour is simulated here.
+    The arrays describe a fixed example. The settings label the log so that
+    tests can reuse the same cube counts across experimental conditions.
     """
     if settings is None:
         settings = Settings()

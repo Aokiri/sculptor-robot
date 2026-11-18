@@ -81,14 +81,20 @@ def test_empty_log_is_not_a_successful_run(sample_log):
 def test_experiment_settings_cover_all_conditions_with_matching_seeds():
     settings = experiment_settings(noise_values=(0.0, 0.001), seeds=(2, 5))
     assert len(settings) == 16
-    groups = comparison_groups([make_fake_log(setting) for setting in settings])
+    logs = []
+    for setting in settings:
+        logs.append(make_fake_log(setting))
+    groups = comparison_groups(logs)
     assert len(groups) == 8
-    assert all(set(group) == {2, 5} for group in groups.values())
+    for group in groups.values():
+        assert set(group) == {2, 5}
 
 
 @pytest.mark.parametrize("problem", ["missing_condition", "missing_seed", "duplicate", "block", "dt"])
 def test_comparison_rejects_unmatched_runs(problem):
-    logs = [make_fake_log(setting) for setting in experiment_settings((0.001,), (0, 1))]
+    logs = []
+    for setting in experiment_settings((0.001,), (0, 1)):
+        logs.append(make_fake_log(setting))
     if problem == "missing_condition":
         logs = logs[2:]
     elif problem == "missing_seed":
@@ -106,7 +112,9 @@ def test_comparison_rejects_unmatched_runs(problem):
 
 
 def test_plots_can_be_saved_without_swift(sample_log, tmp_path):
-    logs = [make_fake_log(setting) for setting in experiment_settings((0.0, 0.001), (0, 1))]
+    logs = []
+    for setting in experiment_settings((0.0, 0.001), (0, 1)):
+        logs.append(make_fake_log(setting))
     figures = [plot_run(sample_log, "Fake log"), plot_comparison(logs, "Fake logs")]
     for i, fig in enumerate(figures):
         path = tmp_path / f"plot_{i}.png"
@@ -123,11 +131,16 @@ def test_demo_saves_logs_csv_and_figures(monkeypatch, tmp_path):
     output = tmp_path / "results" / "evaluation"
     paths = sorted((output / "logs").glob("*.npz"))
     assert len(paths) == 12
-    assert len(comparison_groups([load_log(path) for path in paths])) == 4
+    logs = []
+    for path in paths:
+        logs.append(load_log(path))
+    assert len(comparison_groups(logs)) == 4
     with (output / "summary.csv").open(newline="", encoding="utf-8") as file:
         rows = list(csv.DictReader(file))
     assert len(rows) == 12
-    assert all(row["data_kind"] == "fake" and row["statue_removed"] == "1" for row in rows)
+    for row in rows:
+        assert row["data_kind"] == "fake"
+        assert row["statue_removed"] == "1"
     assert (output / "first_run.png").is_file()
     assert (output / "comparison.png").is_file()
 
@@ -146,11 +159,13 @@ def test_analysis_reads_saved_logs_without_changing_them(monkeypatch, tmp_path):
         originals[path] = path.read_bytes()
     monkeypatch.setattr("sys.argv", ["evaluate", str(folder), "--output", str(output)])
     main()
-    assert all(path.read_bytes() == data for path, data in originals.items())
+    for path, data in originals.items():
+        assert path.read_bytes() == data
     with (output / "summary.csv").open(newline="", encoding="utf-8") as file:
         rows = list(csv.DictReader(file))
     assert len(rows) == 4
-    assert all(row["data_kind"] == "loaded" for row in rows)
+    for row in rows:
+        assert row["data_kind"] == "loaded"
     assert rows[0]["attempted_moves"] == ""
     assert rows[3]["attempted_moves"] == "3"
     assert (output / "comparison.png").is_file()

@@ -97,11 +97,16 @@ def test_drop_interior_removes_only_the_hidden_statue_cubes():
 def test_proxy_pawn_is_symmetric_and_has_a_marble_margin(height, size):
     voxels = proxy_pawn(height, size)
     statue = voxels.centers[voxels.is_statue]
+    points = set()
+    for point in np.round(statue, 10):
+        points.add(tuple(point))
     for axis in (0, 1):
         reflected = statue.copy()
         reflected[:, axis] *= -1
-        points = {tuple(point) for point in np.round(statue, 10)}
-        assert {tuple(point) for point in np.round(reflected, 10)} == points
+        reflected_points = set()
+        for point in np.round(reflected, 10):
+            reflected_points.add(tuple(point))
+        assert reflected_points == points
     assert statue[:, 2].min() == pytest.approx(size / 2)
     assert voxels.centers[:, 2].max() - statue[:, 2].max() == pytest.approx(size)
 

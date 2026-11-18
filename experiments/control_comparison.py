@@ -36,7 +36,7 @@ def log_path(folder: Path, setting: Settings) -> Path:
 
 
 def compare_logs(first: Log, second: Log) -> None:
-    """Check that motion, contact and attempt outcomes are identical for two noise-free runs."""
+    """Check that both logs contain the same motion, contacts and attempt endpoints."""
     for name in FIELDS:
         np.testing.assert_array_equal(getattr(first, name), getattr(second, name), err_msg=name)
 
@@ -84,7 +84,8 @@ def check_pilot(plan: CarvingPlan, log: Log, panda: rtb.Robot) -> None:
                 velocity = joint_velocity(q, move.q_ref)
             elif settings.closed_loop:
                 velocity = rrmc(panda, plan.cell, q, move.tip_goal, move.q_ref, k0=k0)
-            expected = np.clip(q + velocity * DT + noise[step - move.start], limits[0], limits[1])
+            noisy_q = q + velocity * DT + noise[step - move.start]
+            expected = np.clip(noisy_q, limits[0], limits[1])
             np.testing.assert_allclose(log.q[step], expected, atol=1e-12, rtol=0)
 
 
@@ -120,12 +121,13 @@ def run_trial(plan: CarvingPlan, settings: Settings, folder: Path, pilot: bool) 
 def write_runs(path: Path, grid: list[Settings], outcomes: dict[Settings, dict]) -> None:
     rows, fields = [], []
     for settings in grid:
-        if settings in outcomes:
-            row = outcomes[settings]
-            rows.append(row)
-            for key in row:
-                if key not in fields:
-                    fields.append(key)
+        if settings not in outcomes:
+            continue
+        row = outcomes[settings]
+        rows.append(row)
+        for key in row:
+            if key not in fields:
+                fields.append(key)
     temporary = path.with_suffix(".tmp")
     with temporary.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fields, lineterminator="\n")
@@ -144,7 +146,8 @@ def write_drift(output: Path, folder: Path) -> None:
             columns["move"] = np.arange(1, len(ends) + 1)
             columns["target_cube"] = log.target[ends]
         np.testing.assert_array_equal(log.target[ends], columns["target_cube"])
-        columns[condition(settings) + "_mm"] = np.round(1000 * log.tip_error[ends], 6)
+        arrival_error_mm = 1000 * log.tip_error[ends]
+        columns[condition(settings) + "_mm"] = np.round(arrival_error_mm, 6)
     with (output / "drift.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream, lineterminator="\n")
         writer.writerow(columns)
@@ -177,7 +180,9 @@ def main() -> None:
     outcomes = {}
     with ProcessPoolExecutor(max_workers=args.jobs) as pool:
         for stage, settings in (("zero", zero), ("pilot", pilot), ("grid", remaining)):
-            rows = pool.map(run_trial, repeat(plan), settings, repeat(folder), repeat(stage == "pilot"))
+            is_pilot = stage == "pilot"
+            # Results follow the settings order even when workers finish out of order.
+            rows = pool.map(run_trial, repeat(plan), settings, repeat(folder), repeat(is_pilot))
             for setting, row in zip(settings, rows):
                 outcomes[setting] = row
                 write_runs(args.output / "runs.csv", grid, outcomes)

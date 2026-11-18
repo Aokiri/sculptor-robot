@@ -31,5 +31,7 @@ def test_capsule_spheres_include_both_ends_without_gaps():
     centers, radii = capsule_spheres(start, end, radius=0.1)
     np.testing.assert_allclose(centers[0], start)
     np.testing.assert_allclose(centers[-1], end)
-    assert np.all(np.linalg.norm(np.diff(centers, axis=0), axis=1) <= 0.05 + 1e-12)
+    offsets = np.diff(centers, axis=0)
+    distances = np.linalg.norm(offsets, axis=1)
+    assert np.all(distances <= 0.05 + 1e-12)
     assert np.all(radii >= 0.1)
