@@ -6,7 +6,7 @@
 
 A Panda arm carves a statue out of a marble block that sits on a rotating table. Everything is simulated, with Python and the Robotics Toolbox for the control and Swift for the 3D view.
 
-Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the voxelization of a 3D model, the reach and collision checks, the controller of the arm, the PID of the table, the full carving of the pawn (`carving.run`, saved as a log) and its replay with the model on top are done. The comparison of open and closed loop with noise is not written yet.
+Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the voxelization of a 3D model, the reach and collision checks, the controller of the arm, the PID of the table, the full carving of the pawn (`carving.run`, saved as a log) and its replay with the model on top are done. Notebook 06 compares 60 carvings with open and closed loop, joint noise and the posture task on or off.
 
 <table>
   <tr>
@@ -158,6 +158,7 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 | `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 4 min |
 | `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip, and finds which moves are cuts and how the arm leaves the block | about 6 min |
 | `05_table_control` | Tunes the PID of the table, adds it to the carving, carves the pawn model with the joints stopped at their limits and saves the log of the run | about 4 min |
+| [06_control_comparison](notebooks/06_control_comparison.ipynb) | Compares statue damage, remaining marble and tip accuracy using the two published result tables | under 1 min from the tables |
 | `07_replay` | Reads the log of 05, compares what is left of the block with the model, and plays the carving back in Swift with the model on top (needs the log of 05) | under 1 min, about 1.5 min when it records the GIFs |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.

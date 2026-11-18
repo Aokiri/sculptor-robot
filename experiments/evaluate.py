@@ -60,8 +60,14 @@ def main() -> None:
         for name, log in zip(names, logs):
             save_log(log, log_folder / name)
 
+    # Older logs can share a folder with logs that record movement endpoints.
+    columns = []
+    for row in rows:
+        for name in row:
+            if name not in columns:
+                columns.append(name)
     with (output / "summary.csv").open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(file, fieldnames=columns)
         writer.writeheader()
         writer.writerows(rows)
 

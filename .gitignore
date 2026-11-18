@@ -8,3 +8,6 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
+
+# Full trajectories from notebook 06 (the two result tables are tracked).
+/results/06_control_comparison/logs/

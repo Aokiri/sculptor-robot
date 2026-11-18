@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from sculptor.carving import Log
+from sculptor.controller import TOLERANCE
 
 
 def check_log(log: Log) -> None:
@@ -25,6 +26,13 @@ def check_log(log: Log) -> None:
         raise ValueError("The tip error must be finite and non-negative at a target")
 
 
+def arrival_steps(log: Log) -> np.ndarray:
+    """Ordered endpoints of actual moves. The setup cube at step zero has no approach."""
+    if log.attempt_end_step is None:
+        raise ValueError("This log has no recorded attempt endpoints")
+    return np.sort(log.attempt_end_step[log.attempt_end_step > 0])
+
+
 def summarize(log: Log) -> dict:
     """One row of measurements; fractions use the original cube counts."""
     check_log(log)
@@ -36,7 +44,7 @@ def summarize(log: Log) -> dict:
     marble_removed = int(np.count_nonzero(removed & ~statue))
     error = log.tip_error[log.target >= 0]
 
-    return {
+    row = {
         **asdict(log.settings),
         "statue_cubes": n_statue,
         "statue_removed": statue_removed,
@@ -49,6 +57,18 @@ def summarize(log: Log) -> dict:
         "tip_rmse_m": float(np.sqrt(np.mean(error**2))) if len(error) else np.nan,
         "tip_max_error_m": float(np.max(error)) if len(error) else np.nan,
     }
+    if log.attempt_end_step is not None:
+        ends = arrival_steps(log)
+        arrival = log.tip_error[ends]
+        row["attempted_moves"] = len(ends)
+        row["within_1mm"] = int(np.count_nonzero(arrival <= TOLERANCE))
+        row["arrival_rmse_mm"] = np.nan
+        if len(arrival):
+            row["arrival_rmse_mm"] = float(1000 * np.sqrt(np.mean(arrival**2)))
+        if np.any(log.attempt_end_step == 0):
+            row["setup_cube"] = int(log.target[0])
+            row["setup_error_mm"] = float(1000 * log.tip_error[0])
+    return row
 
 
 def removal_history(log: Log) -> tuple[np.ndarray, np.ndarray]:

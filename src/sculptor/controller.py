@@ -61,10 +61,20 @@ def servo(robot: rtb.Robot, cell: Cell, q: np.ndarray, target: sm.SE3, q_posture
     raise RuntimeError("the tip did not reach its target")
 
 
-def joint_move(q: np.ndarray, q_goal: np.ndarray, dt: float, gain: float = K_JOINT, tol: float = 1e-3) -> np.ndarray:
+def joint_velocity(q: np.ndarray, q_goal: np.ndarray, gain: float = K_JOINT) -> np.ndarray:
+    """Joint-space transfer command [rad/s] for the current seven joint angles."""
+    return gain * (q_goal - q)
+
+
+def joint_move(q: np.ndarray, q_goal: np.ndarray, dt: float, gain: float = K_JOINT, tol: float = 1e-3,
+               *, limits: np.ndarray | None = None) -> np.ndarray:
     """Joints at every step (steps, 7) of a proportional move in joint space, until q_goal is within tol."""
     path = []
     while np.linalg.norm(q_goal - q) > tol:
-        q = q + gain * (q_goal - q) * dt
+        if limits is not None and len(path) == MAX_STEPS:
+            raise RuntimeError("the joint transfer did not reach its target within the joint limits")
+        q = q + joint_velocity(q, q_goal, gain) * dt
+        if limits is not None:
+            q = np.clip(q, limits[0], limits[1])
         path.append(q)
     return np.array(path)

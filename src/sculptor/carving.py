@@ -3,7 +3,7 @@
 The simulation runs without Swift. The experiments read the log, and Swift can replay it later.
 """
 
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 import numpy as np
@@ -12,7 +12,7 @@ import spatialmath as sm
 
 from sculptor.cell import N_SIDES, Cell, wrap_angle
 from sculptor.collision import Hitboxes, cube_at, touched
-from sculptor.controller import MAX_STEPS, RETRACT, joint_move, servo
+from sculptor.controller import K0, MAX_STEPS, RETRACT, joint_move, joint_velocity, rrmc, servo
 from sculptor.model import Voxels
 from sculptor.table import PID, Table
 
@@ -42,6 +42,7 @@ class Log:
     removed_at: np.ndarray # (N,) step at which each cube was removed, -1 if it never was
     voxels: Voxels # the block that was carved
     settings: Settings # how the run was made
+    attempt_end_step: np.ndarray | None = None  # (N,) last approach/cut step, 0 at setup, -1 if unattempted
     
     def __post_init__(self) -> None:
         # The checks of the contract, so a wrong log fails as soon as it is built
@@ -52,29 +53,32 @@ class Log:
         assert np.all((self.removed_at >= -1) & (self.removed_at < n_steps)), "removed_at must be a step or -1"
         assert np.all((self.target >= -1) & (self.target < len(self.voxels.centers))), "target must be a cube or -1"
         assert np.all(np.isnan(self.tip_error) == (self.target == -1)), "tip_error is NaN only without a target"
+        if self.attempt_end_step is not None:
+            ends = self.attempt_end_step
+            assert ends.shape == self.removed_at.shape and np.issubdtype(ends.dtype, np.integer), "invalid attempt_end_step"
+            assert np.all((ends >= -1) & (ends < n_steps)), "attempt_end_step must be a step or -1"
+            cubes = np.flatnonzero(ends >= 0)
+            assert np.array_equal(self.target[ends[cubes]], cubes), "attempt endpoint must name its target"
+            ends.flags.writeable = False
         for array in (self.t, self.q, self.phi, self.target, self.tip_error, self.removed_at):
             array.flags.writeable = False
             
 
 def run(voxels: Voxels, cell: Cell, settings: Settings) -> Log:
-    """Carve the block as in notebook 05 (PID table, controller, cuts and repositions) and return every step.
-
-    So far only the default settings are written: closed loop, posture task and no noise.
-    """
-    if settings != Settings(seed=settings.seed):
-        raise NotImplementedError("open loop, no posture task and noise come in the next notebook")
+    """Carve with the requested arm controller on the motion schedule of notebook 05."""
     carver = make_carver(rtb.models.Panda(), cell, voxels)
-    carver.run(is_cut(voxels, carver.order), posture="ik", retract=RETRACT, record=True, table_pid=True,
-               stop_at_limits=True)
-    return carver.log(settings)
+    return carver.comparison_plan().run(settings)
 
 
 def save_log(log: Log, path: Path) -> None:
     """Save a run in one .npz file, with its block and its settings."""
+    optional = {}
+    if log.attempt_end_step is not None:
+        optional["attempt_end_step"] = log.attempt_end_step
     np.savez_compressed(path, t=log.t, q=log.q, phi=log.phi, target=log.target,
                         tip_error=log.tip_error, removed_at=log.removed_at,
                         centers=log.voxels.centers, is_statue=log.voxels.is_statue,
-                        size=log.voxels.size, **asdict(log.settings))
+                        size=log.voxels.size, **asdict(log.settings), **optional)
     
 
 def load_log(path: Path) -> Log:
@@ -83,8 +87,9 @@ def load_log(path: Path) -> Log:
     with np.load(path) as data:
         voxels = Voxels(data["centers"], data["is_statue"], data["size"].item())
         settings = Settings(**{f.name: data[f.name].item() for f in fields(Settings)})
+        ends = data.get("attempt_end_step")
         return Log(data["t"], data["q"], data["phi"], data["target"], data["tip_error"],
-                   data["removed_at"], voxels, settings)
+                   data["removed_at"], voxels, settings, ends)
         
         
 def side_of(centers: np.ndarray, n_sides: int) -> np.ndarray:
@@ -166,6 +171,96 @@ def make_carver(robot: rtb.Robot, cell: Cell, voxels: Voxels, seed: int = 0) -> 
     return Carver(robot, cell, voxels, order[keep], phi[keep], q_ik[keep], hitboxes, seed=seed)
 
 
+def first_contact(point: np.ndarray, voxels: Voxels, removed_at: np.ndarray, step: int) -> int:
+    """Remove the occupied cube at this block-frame point [m]. Return its index, or -1."""
+    cube = cube_at(point, voxels.centers, voxels.size)
+    if cube >= 0 and removed_at[cube] == -1:
+        removed_at[cube] = step
+        return cube
+    return -1
+
+
+@dataclass(frozen=True)
+class ArmMove:
+    """Active samples [start, stop). A tip goal selects RRMC, otherwise this is a joint transfer."""
+
+    start: int
+    stop: int
+    q_ref: np.ndarray
+    tip_goal: sm.SE3 | None
+
+
+@dataclass
+class CarvingPlan:
+    """The nominal 05 log supplies the clock, table angles, targets and initial state for all runs."""
+
+    nominal: Log
+    moves: list[ArmMove]
+    cell: Cell
+    _commands: dict[bool, np.ndarray] = field(default_factory=dict, init=False, repr=False)
+
+    def nominal_commands(self, posture_task: bool) -> np.ndarray:
+        """Record the noise-free command [rad/s] before clipping for each active sample."""
+        if posture_task not in self._commands:
+            commands = np.zeros_like(self.nominal.q)
+            self._joints(rtb.models.Panda(), Settings(posture_task=posture_task), commands)
+            commands.flags.writeable = False
+            self._commands[posture_task] = commands
+        return self._commands[posture_task]
+
+    def _joints(self, robot: rtb.Robot, settings: Settings, record: np.ndarray | None = None) -> np.ndarray:
+        q = self.nominal.q[0]
+        path = np.empty_like(self.nominal.q)
+        next_step = 0
+        rng = np.random.default_rng(settings.seed)
+        limits = robot.qlim
+        k0 = 0.0
+        if settings.posture_task:
+            k0 = K0
+        for move in self.moves:
+            # During setup and PID turns the arm holds its last actual position.
+            path[next_step:move.start] = q
+            for step in range(move.start, move.stop):
+                if not settings.closed_loop:
+                    velocity = self._commands[settings.posture_task][step]
+                elif move.tip_goal is None:
+                    velocity = joint_velocity(q, move.q_ref)
+                else:
+                    velocity = rrmc(robot, self.cell, q, move.tip_goal, move.q_ref, k0=k0)
+                if record is not None:
+                    record[step] = velocity
+                q = q + velocity * DT
+                if settings.noise_std > 0:
+                    q += rng.normal(0.0, settings.noise_std, robot.n)
+                q = np.clip(q, limits[0], limits[1])
+                path[step] = q
+            next_step = move.stop
+        path[next_step:] = q
+        return path
+
+    def run(self, settings: Settings) -> Log:
+        """Run one setting on the fixed schedule and score every sampled tip contact."""
+        if not np.isfinite(settings.noise_std) or settings.noise_std < 0:
+            raise ValueError("noise_std must be finite and non-negative")
+        if not settings.closed_loop:
+            self.nominal_commands(settings.posture_task)
+        robot = rtb.models.Panda()
+        q = self._joints(robot, settings)
+        nominal = self.nominal
+        voxels = nominal.voxels
+        removed_at = np.full(len(voxels.centers), -1)
+        error = np.full(len(q), np.nan)
+        for step, joints in enumerate(q):
+            tip_W = robot.fkine(joints, tool=self.cell.tip).t
+            point = self.cell.world_to_block(tip_W, nominal.phi[step])[0]
+            first_contact(point, voxels, removed_at, step)
+            cube = nominal.target[step]
+            if cube >= 0:
+                error[step] = np.linalg.norm(point - voxels.centers[cube])
+        return Log(nominal.t, q, nominal.phi, nominal.target, error, removed_at,
+                   voxels, settings, nominal.attempt_end_step)
+
+
 class Carver:
     """Takes the chisel over the marble of a carving order with the controller, and counts what goes wrong.
 
@@ -185,7 +280,7 @@ class Carver:
         return self._cell.tip_target(p_W) * sm.SE3(0.0, 0.0, -back)
 
     def run(self, cut: np.ndarray, posture: str = "qr", retract: float | None = None, record: bool = False,
-            table_pid: bool = False, stop_at_limits: bool = False) -> dict:
+            table_pid: bool = False, stop_at_limits: bool = False, check_hitboxes: bool = True) -> dict:
         """Goes over the whole order and returns the counts.
 
         cut says, for each move, whether the arm cuts its way to the next cube. Otherwise it repositions:
@@ -195,38 +290,56 @@ class Carver:
         IK pose of the point the tip is going to. With table_pid=True the PID turns the table between
         sides, and the time it takes is counted. With stop_at_limits=True a joint that reaches a limit
         stays there, and the steps with a joint at a limit are counted. With record=True every step is
-        kept for frames().
+        kept for frames(). The comparison skips transfer hitbox counts and still checks every tip contact.
         """
         self._stop_at_limits = stop_at_limits
-        self._present = np.ones(len(self._voxels.centers), dtype=bool)
-        self._present[self._order[0]] = False
+        if len(self._order) == 0:
+            raise ValueError("The carving order has no reachable marble cube")
+        self._check_hitboxes = check_hitboxes
+        self._step = -1
+        self._removed_at = np.full(len(self._voxels.centers), -1)
+        self._attempt_end_step = np.full(len(self._voxels.centers), -1)
+        self._moves: list[ArmMove] = []
         self._counts = {"cuts": int(cut.sum()), "repositions": int(len(cut) - cut.sum()), "steps": 0,
                         "past a joint limit [rad]": 0.0, "largest axis error [deg]": 0.0,
                         "tip in statue": 0, "tip in marble": 0, "hitbox contacts": 0}
+        if not check_hitboxes:
+            del self._counts["hitbox contacts"]
         if stop_at_limits:
             self._counts["steps at a joint limit"] = 0
         if table_pid:
             self._counts["table turning [s]"] = 0.0
-        self._frames = [(self._q_ik[0], self._phi[0], int(self._order[0]))] if record else None
-        self._targets = [int(self._order[0])] if record else None
+        self._frames = None
+        if record:
+            self._frames = []
+        self._targets = []
+        self._errors = []
         q = self._q_ik[0]
+        self._sample(q, self._phi[0], self._order[0], self._robot.fkine(q, tool=self._cell.tip).t)
+        self._attempt_end_step[self._order[0]] = 0
         for k in range(1, len(self._order)):
             if cut[k - 1]:
                 q = self._move(q, k, 0.0, posture)
             elif retract is None:
                 q = self._q_ik[k]
-                self._keep(q[None], k, removed=True)
+                self._sample(q, self._phi[k], self._order[k], self._robot.fkine(q, tool=self._cell.tip).t)
             else:
                 q = self._move(q, k - 1, retract, posture)
                 if table_pid:
                     self._turn_with_pid(q, k)
                 else:
                     self._turn_at_once(q, k)
-                path = joint_move(q, self._ik(k, retract), DT)
-                self._inspect(path, k, retract, joint_space=True)
-                self._keep(path, k)
-                q = self._move(path[-1], k, 0.0, posture)
-            self._present[self._order[k]] = False
+                q_ref = self._ik(k, retract)
+                limits = None
+                if stop_at_limits:
+                    limits = self._robot.qlim
+                path = joint_move(q, q_ref, DT, limits=limits)
+                if len(path):
+                    self._remember_move(path, q_ref, None)
+                    self._inspect(path, k, retract, joint_space=True)
+                    q = path[-1]
+                q = self._move(q, k, 0.0, posture)
+            self._attempt_end_step[self._order[k]] = self._step
         self._counts["time [min]"] = self._counts.pop("steps") * DT / 60
         return self._counts
 
@@ -247,30 +360,32 @@ class Carver:
         phi = np.array([frame[1] for frame in self._frames])
         target = np.array(self._targets)
 
-        removed_at = np.full(len(self._voxels.centers), -1)
-        for step, (_, _, cube) in enumerate(self._frames):
-            if cube >= 0:
-                removed_at[cube] = step
+        return Log(np.arange(len(q)) * DT, q, phi, target, np.array(self._errors),
+                   self._removed_at, self._voxels, settings, self._attempt_end_step)
 
-        # Distance from the point of the tip to the center of its target cube, both in the block frame
-        tip_error = np.full(len(q), np.nan)
-        for step in range(len(q)):
-            if target[step] >= 0:
-                tip_W = self._robot.fkine(q[step], tool=self._cell.tip).t
-                tip_B = self._cell.world_to_block(tip_W, phi[step])[0]
-                tip_error[step] = np.linalg.norm(tip_B - self._voxels.centers[target[step]])
+    def comparison_plan(self) -> CarvingPlan:
+        """Time each move using the noise-free, posture-on controller and PID of notebook 05."""
+        self.run(is_cut(self._voxels, self.order), posture="ik", retract=RETRACT, record=True,
+                 table_pid=True, stop_at_limits=True, check_hitboxes=False)
+        return CarvingPlan(self.log(Settings()), self._moves, self._cell)
 
-        return Log(np.arange(len(q)) * DT, q, phi, target, tip_error, removed_at, self._voxels, settings)
+    def _remember_move(self, path: np.ndarray, q_ref: np.ndarray, goal: sm.SE3 | None) -> None:
+        if self._frames is not None:
+            start = self._step + 1
+            self._moves.append(ArmMove(start, start + len(path), q_ref, goal))
 
-    def _keep(self, path: np.ndarray, k: int, removed: bool = False) -> None:
-        """Keeps the steps of a path toward the cube in position k for frames(); with removed, it goes at the last step."""
-        if self._frames is None:
-            return
-        for q in path:
-            self._frames.append((q, self._phi[k], -1))
-            self._targets.append(int(self._order[k]))
-        if removed:
-            self._frames[-1] = (path[-1], self._phi[k], int(self._order[k]))
+    def _sample(self, q: np.ndarray, angle: float, target: int, tip_W: np.ndarray) -> int:
+        self._step += 1
+        point = self._cell.world_to_block(tip_W, angle)[0]
+        cube = first_contact(point, self._voxels, self._removed_at, self._step)
+        if self._frames is not None:
+            error = np.nan
+            if target >= 0:
+                error = np.linalg.norm(point - self._voxels.centers[target])
+            self._errors.append(error)
+            self._targets.append(int(target))
+            self._frames.append((q, angle, cube))
+        return cube
 
     def _turn_at_once(self, q: np.ndarray, k: int, steps: int = 20) -> None:
         """The table jumps from phi[k - 1] to phi[k]; for frames() it turns in a few steps with the arm still.
@@ -281,8 +396,8 @@ class Carver:
             return
         turn = wrap_angle(self._phi[k] - self._phi[k - 1])
         for s in np.linspace(0.0, 1.0, steps + 1)[1:]:
-            self._frames.append((q, self._phi[k - 1] + s * turn, -1))
-            self._targets.append(-1)
+            angle = self._phi[k - 1] + s * turn
+            self._sample(q, angle, -1, self._robot.fkine(q, tool=self._cell.tip).t)
 
     def _turn_with_pid(self, q: np.ndarray, k: int) -> None:
         """The PID turns the table from phi[k - 1] to phi[k] the short way, with the arm still out of the block.
@@ -294,13 +409,12 @@ class Carver:
             return
         goal = self._phi[k - 1] + wrap_angle(self._phi[k] - self._phi[k - 1])
         table, pid = Table(self._phi[k - 1]), PID(dt=DT)
+        tip_W = self._robot.fkine(q, tool=self._cell.tip).t
         for _ in range(MAX_STEPS):
             table.step(pid(goal - table.phi), DT)
             self._counts["steps"] += 1
             self._counts["table turning [s]"] += DT
-            if self._frames is not None:
-                self._frames.append((q, table.phi, -1))
-                self._targets.append(-1)
+            self._sample(q, table.phi, -1, tip_W)
             if table.stopped_at(goal):
                 return
         raise RuntimeError("the table did not stop on the next side")
@@ -315,11 +429,10 @@ class Carver:
     def _move(self, q: np.ndarray, k: int, back: float, posture: str) -> np.ndarray:
         """The controller takes the tip to tip_goal(k, back); returns the joints at the end."""
         q_posture = self._ik(k, back) if posture == "ik" else self._robot.qr
-        path = servo(self._robot, self._cell, q, self.tip_goal(k, back), q_posture, DT,
-                     stop_at_limits=self._stop_at_limits)
+        goal = self.tip_goal(k, back)
+        path = servo(self._robot, self._cell, q, goal, q_posture, DT, stop_at_limits=self._stop_at_limits)
+        self._remember_move(path, q_posture, goal)
         self._inspect(path, k, back)
-        # The cube goes when the tip reaches it, not when the tip backs out of the previous one
-        self._keep(path, k, removed=back == 0.0)
         return path[-1]
 
     def _inspect(self, path: np.ndarray, k: int, back: float, joint_space: bool = False) -> None:
@@ -342,23 +455,26 @@ class Carver:
             counts["steps at a joint limit"] += int(at_limit.any(axis=1).sum())
 
         # The cubes still there, except the target, which is meant to have the tip inside it
-        others = self._present.copy()
+        others = self._removed_at < 0
         others[self._order[k]] = False
         axis_target = self.tip_goal(k, back).R[:, 2]
 
         for q in path:
             T = self._robot.fkine(q, tool=self._cell.tip)
             if joint_space:
-                if self._hitboxes_touch(q, k, others):
+                if self._check_hitboxes and self._hitboxes_touch(q, k, others):
                     counts["hitbox contacts"] += 1
             else:
                 angle = np.degrees(np.arccos(np.clip(T.R[:, 2] @ axis_target, -1.0, 1.0)))
                 counts["largest axis error [deg]"] = max(counts["largest axis error [deg]"], float(angle))
 
-            # Whether the point of the tip is inside one of the other cubes
-            c = cube_at(self._cell.world_to_block(T.t, self._phi[k])[0], self._voxels.centers, self._voxels.size)
-            if c >= 0 and others[c]:
-                counts["tip in statue" if self._voxels.is_statue[c] else "tip in marble"] += 1
+            cube = self._sample(q, self._phi[k], self._order[k], T.t)
+            if cube >= 0 and others[cube]:
+                others[cube] = False
+                key = "tip in marble"
+                if self._voxels.is_statue[cube]:
+                    key = "tip in statue"
+                counts[key] += 1
 
     def _hitboxes_touch(self, q: np.ndarray, k: int, cubes: np.ndarray) -> bool:
         """Whether a hitbox touches one of the cubes (a mask over all the cubes), with the table at phi[k]."""

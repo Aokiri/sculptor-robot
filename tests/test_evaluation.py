@@ -139,7 +139,10 @@ def test_analysis_reads_saved_logs_without_changing_them(monkeypatch, tmp_path):
     originals = {}
     for i, settings in enumerate(experiment_settings((0.001,), (0,))):
         path = folder / f"run_{i}.npz"
-        save_log(make_fake_log(settings), path)
+        log = make_fake_log(settings)
+        if i == 3:
+            log = replace(log, attempt_end_step=np.array([-1, -1, 0, 2, 4, 5]))
+        save_log(log, path)
         originals[path] = path.read_bytes()
     monkeypatch.setattr("sys.argv", ["evaluate", str(folder), "--output", str(output)])
     main()
@@ -148,4 +151,6 @@ def test_analysis_reads_saved_logs_without_changing_them(monkeypatch, tmp_path):
         rows = list(csv.DictReader(file))
     assert len(rows) == 4
     assert all(row["data_kind"] == "loaded" for row in rows)
+    assert rows[0]["attempted_moves"] == ""
+    assert rows[3]["attempted_moves"] == "3"
     assert (output / "comparison.png").is_file()

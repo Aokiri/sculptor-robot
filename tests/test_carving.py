@@ -3,7 +3,7 @@ from dataclasses import FrozenInstanceError, replace
 import numpy as np
 import pytest
 
-from sculptor.carving import Settings, carving_order, load_log, save_log, side_of, table_angles
+from sculptor.carving import Settings, carving_order, load_log, run, save_log, side_of, table_angles
 from sculptor.cell import Cell
 from sculptor.model import Voxels
 
@@ -40,6 +40,7 @@ def test_log_save_load_round_trip(sample_log, tmp_path):
     loaded = load_log(path)
 
     assert loaded.settings == settings
+    assert loaded.attempt_end_step is None
     assert loaded.voxels.size == original.voxels.size
     np.testing.assert_array_equal(loaded.voxels.centers, original.voxels.centers)
     np.testing.assert_array_equal(loaded.voxels.is_statue, original.voxels.is_statue)
@@ -65,3 +66,15 @@ def test_carving_order_is_top_first_and_excludes_statue(n_sides, expected):
         world = cell.block_to_world(voxels.centers[index], angle)[0]
         assert world[0] < cell.table_top.t[0]
         assert world[1] == pytest.approx(cell.table_top.t[1], abs=1e-12)
+
+
+def test_public_run_accepts_noisy_open_loop_on_a_reachable_route() -> None:
+    # Three marble targets at the top of the pawn's workspace, including a change of side.
+    centers = np.array([[0, 0, 0.015], [0.12, 0, 0.435], [0.09, 0, 0.435], [0, 0.12, 0.435]])
+    voxels = Voxels(centers, np.array([True, False, False, False]), 0.03)
+    settings = Settings(closed_loop=False, posture_task=False, noise_std=0.001, seed=3)
+    log = run(voxels, Cell(), settings)
+    assert log.settings == settings
+    assert log.attempt_end_step[1] == 0
+    assert np.all(log.attempt_end_step[2:] > 0)
+    assert np.any(log.target == -1)

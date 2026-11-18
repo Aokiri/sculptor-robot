@@ -49,19 +49,41 @@ The comparison shows damage together with remaining marble: removing nothing
 must not look like a good result. Dots are runs, squares are means and bars are
 sample standard deviations across seeds, not confidence intervals.
 
-## Real runs
+## Notebook 06 · Joint noise on the STL pawn
 
-`experiment_settings()` prepares 60 settings: four control/posture conditions,
-noise standard deviations 0, 0.001 and 0.005 rad, and seeds 0 to 4. Keep the initial state,
-carving order, time step, limits and stopping rule fixed, and reset between runs.
-Matching seeds only imply matching disturbances if random samples are consumed
-consistently.
+Open the [executed notebook](../notebooks/06_control_comparison.ipynb) or
+download its [HTML copy](../html/06_control_comparison.html). The figures
+use two tracked tables. [runs.csv](../results/06_control_comparison/runs.csv)
+has one row per trial and [drift.csv](../results/06_control_comparison/drift.csv)
+has the four arrival-error series for 0.001 rad, seed 0.
 
-The simulator is still a stub. PID gains, a table reference and a termination
-reason are not yet in the contract. PID response, success rates and unreachable
-cubes will be evaluated when those data are available.
+From the repository root, regenerate the local trajectories and both tables with
 
-The tests cover the implemented geometry and log functions, the hand-counted
-metrics, matched comparisons, plots and the demo. GitHub Actions runs them
-with the locked project environment. The analysis uses NumPy and Matplotlib;
-pytest is the test tool requested in the issue.
+```bash
+uv run python -m experiments.control_comparison --jobs 4
+```
+
+The default is one worker. Use `--output PATH` for a separate output directory.
+The script rebuilds the 42 cm pawn from `models/Chess_Pawn.stl` at 3 cm
+resolution. It checks the noise-free reference against the saved 05
+trajectory, compares open and closed loop at zero noise, then verifies 12
+pilot runs at 0.001 rad with seeds 0 through 2. It runs the remaining
+settings once, for 60 trials in total. All four conditions share an IK seed,
+initial state, target sequence, 0.05 s clock, table PID and movement durations.
+The seven joint disturbances are drawn only on active arm steps.
+A failed trial has its reason in `runs.csv`.
+
+The full logs are under `results/06_control_comparison/logs/`. Each
+`removed_at` value gives the first sampled tip contact with that cube.
+`attempt_end_step` records the end of each planned cut or approach, even
+for a missed target. Both arrays use -1 for an event that never occurred.
+The setup cube has endpoint 0. It is excluded from `attempted_moves`,
+`within_1mm` and `arrival_rmse_mm`. The saved 05 log can still be loaded
+and replayed. It has no endpoint field.
+
+To execute the notebook in a fresh kernel and export the figures to HTML, run
+
+```bash
+uv run jupyter nbconvert --to notebook --execute --inplace notebooks/06_control_comparison.ipynb
+uv run jupyter nbconvert --to html --template classic --no-prompt --output-dir html notebooks/06_control_comparison.ipynb
+```
