@@ -169,16 +169,18 @@ KEEP_EVERY: int = 3
 
 
 @contextmanager
-def recording(env: swift.Swift, gif: Path, downloads: Path = DOWNLOADS) -> Iterator[None]:
+def recording(env: swift.Swift, gif: Path, downloads: Path = DOWNLOADS,
+              camera: tuple[list[float], list[float]] = (CAMERA_POSITION, CAMERA_LOOK_AT)) -> Iterator[None]:
     """Record what Swift draws inside the with block and save it as `gif`.
 
     Swift saves PNG frames, which the browser writes much faster than a GIF, and the GIF is
-    built here from them. It plays at the real speed of the recording.
+    built here from them. It plays at the real speed of the recording. camera is the position
+    of the camera and the point it looks at.
     """
     download = downloads / f"{gif.stem}.tar"
     # The browser renames a download that already exists, so an old one would hide the new one
     download.unlink(missing_ok=True)
-    env.set_camera_pose(CAMERA_POSITION, CAMERA_LOOK_AT)
+    env.set_camera_pose(*camera)
     # The framerate only names the frames; their real timing is measured below
     env.start_recording(gif.stem, 20, format="png")
     started = time.perf_counter()

@@ -129,7 +129,7 @@ def voxelize(mesh_path: Path, height: float, size: float = CUBE_SIZE) -> Voxels:
     on the z axis. Returns `from_grid(statue, size)`, where `statue` is the filled grid of
     the model with layer 0 at its base.
     """
-    mesh = place(trimesh.load(mesh_path, force="mesh"), height) # np.place§
+    mesh = place(trimesh.load(mesh_path, force="mesh"), height) 
     return from_grid(inside(mesh, grid_centers(mesh, size)), size)
 
 
@@ -139,7 +139,7 @@ def drop_interior(voxels: Voxels) -> Voxels:
     A statue cube is inside when its six neighbours are statue too; the table under
     the statue counts as covered. Fewer cubes means less work for Swift at each step.
     """
-    #raise NotImplementedError
+    
         # The cubes back on a 3D grid of True (statue) and False
     index = np.round((voxels.centers - voxels.centers.min(axis=0)) / voxels.size).astype(int)
     statue = np.zeros(index.max(axis=0) + 1, dtype=bool)
