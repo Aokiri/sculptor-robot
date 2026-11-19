@@ -90,20 +90,31 @@ def grid_centers(mesh: trimesh.Trimesh, size: float) -> np.ndarray:
 def inside(mesh: trimesh.Trimesh, centers: np.ndarray) -> np.ndarray:
     """True for the cubes whose centre is inside the mesh.
 
-    A vertical ray goes up through each column of cubes; a centre is inside when the ray
-    crosses the surface an odd number of times above it.
+    A vertical ray goes up through each column of cubes; a centre is inside a part of the mesh
+    when the ray crosses that part an odd number of times above it. Each connected part is
+    tested on its own, and a centre is inside the mesh when it is inside any part: a model made
+    of closed pieces that overlap (like Chess_Pawn.stl) would otherwise count the overlap as
+    outside, since the ray crosses the surface twice there. Each part must be closed; a closed
+    cavity inside the statue is filled, which is what carving from a block gives anyway.
     """
     statue = np.zeros(centers.shape[:3], dtype=bool)
-    for i, j in np.ndindex(statue.shape[:2]):
-        x, y = centers[i, j, 0, :2] + RAY_SHIFT
-        heights = crossings(mesh.triangles, x, y)
-        statue[i, j] = (heights > centers[i, j, :, 2, None]).sum(axis=1) % 2 == 1
+    for part in mesh.split(only_watertight=False):
+        triangles = part.triangles
+        # The box of each triangle seen from above, to skip the ones far from the ray
+        low = triangles[:, :, :2].min(axis=1)
+        high = triangles[:, :, :2].max(axis=1)
+        for i, j in np.ndindex(statue.shape[:2]):
+            x, y = centers[i, j, 0, :2] + RAY_SHIFT
+            near = (low[:, 0] <= x) & (x <= high[:, 0]) & (low[:, 1] <= y) & (y <= high[:, 1])
+            heights = crossings(triangles[near], x, y)
+            statue[i, j] |= (heights > centers[i, j, :, 2, None]).sum(axis=1) % 2 == 1
     return statue
-
 
 
 def crossings(triangles: np.ndarray, x: float, y: float) -> np.ndarray:
     """Heights where the vertical line through (x, y) passes through the triangles."""
+    if len(triangles) == 0:
+        return np.empty(0)
     flat = triangles * [1, 1, 0]  # the triangles seen from above
     point = np.tile([x, y, 0.0], (len(triangles), 1))
     with np.errstate(divide="ignore", invalid="ignore"):  # walls seen edge-on give NaN: never hit
