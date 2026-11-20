@@ -8405,7 +8405,7 @@ With <strong>4 sides</strong> the table turns $59$ times and covers $92.7$ rad, 
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <p>In section 2, the tip went over one side with the table still. Here it goes over all the marble in the carving order, with the controller of section 2. When the order moves to the next side the table turns, for now at once from one step to the next.
 At every step, we check the joints against their limits, the axis of the chisel and whether the point of the tip goes into a cube that is still there and is not its target.
-That cube would be removed out of order or it would be damaged if it belongs to the statue.
+That cube is removed the first time the tip enters it: out of order if it is marble, damaged if it belongs to the statue. The counts are cubes, each one counted once.
 <code>Carver</code> in <code>src/sculptor/carving.py</code> does the run and counts all of this.</p>
 </div>
 </div>
@@ -8528,8 +8528,8 @@ That cube would be removed out of order or it would be damaged if it belongs to 
 <td>0</td>
 <td>0.196</td>
 <td>1.661</td>
-<td>364</td>
-<td>3138</td>
+<td>48</td>
+<td>671</td>
 </tr>
 <tr>
 <th>cuts only between neighbours</th>
@@ -8538,7 +8538,7 @@ That cube would be removed out of order or it would be damaged if it belongs to 
 <td>0.000</td>
 <td>1.411</td>
 <td>0</td>
-<td>2</td>
+<td>1</td>
 </tr>
 </tbody>
 </table>
@@ -8554,8 +8554,8 @@ That cube would be removed out of order or it would be damaged if it belongs to 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>When every move is a cut, the tip spends $364$ steps inside the statue and $3138$ inside marble that is not its target, and a joint goes $0.196$ rad past its limit.
-Cutting only between neighbours takes the statue to zero and the marble to $2$ steps, and keeps the joints within their limits, with $1235$ of the moves still cuts.</p>
+<p>When every move is a cut, the tip enters $48$ statue cubes and $671$ marble cubes that are not its target, and a joint goes $0.196$ rad past its limit.
+Cutting only between neighbours takes the statue to zero and the marble to $1$ cube, and keeps the joints within their limits, with $1235$ of the moves still cuts.</p>
 </div>
 </div>
 </div>
@@ -8731,7 +8731,7 @@ With the rule they become repositions, together with the other jumps between row
 <td>0.003</td>
 <td>0.784</td>
 <td>0</td>
-<td>16</td>
+<td>6</td>
 <td>29</td>
 <td>58.566</td>
 </tr>
@@ -8739,9 +8739,9 @@ With the rule they become repositions, together with the other jumps between row
 <th>posture toward the IK pose, retract 0.03 m</th>
 <td>0.000</td>
 <td>0.124</td>
-<td>4</td>
-<td>266</td>
-<td>3960</td>
+<td>2</td>
+<td>101</td>
+<td>3636</td>
 <td>53.165</td>
 </tr>
 <tr>
@@ -8767,8 +8767,8 @@ With the rule they become repositions, together with the other jumps between row
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>With the posture toward $\mathbf{q}_r$, the moves in joint space touch the block at $29$ steps, the tip goes into marble at $16$ and a joint goes $0.003$ rad past its limit. While the tip backs out and comes in, the posture task pulls the arm away from the IK poses. Pulling the posture toward the IK pose of the point the tip goes to removes all of it.
-With that posture, backing out $0.03$ m is too little, since the hitboxes touch the block at $3960$ steps and the tip goes $4$ steps into the statue. With $0.09$ m nothing touches.</p>
+<p>With the posture toward $\mathbf{q}_r$, the moves in joint space touch the block at $29$ steps, the tip enters $6$ marble cubes and a joint goes $0.003$ rad past its limit. While the tip backs out and comes in, the posture task pulls the arm away from the IK poses. Pulling the posture toward the IK pose of the point the tip goes to removes all of it.
+With that posture, backing out $0.03$ m is too little, since the hitboxes touch the block at $3960$ steps and the tip enters $2$ statue cubes. With $0.09$ m nothing touches.</p>
 <p>We use the IK pose as posture and $0.09$ m (<code>RETRACT</code> in <code>src/sculptor/controller.py</code>); the whole carving then takes $57.391$ simulated minutes.</p>
 </div>
 </div>
@@ -8879,7 +8879,7 @@ With that posture, backing out $0.03$ m is too little, since the hitboxes touch 
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <p>The next notebooks reuse the 4 sides of the block (<code>N_SIDES</code> and <code>Cell.side_angle</code> in <code>src/sculptor/cell.py</code>) and the carving order by sides, with the cubes closest to the robot first (<code>carving_order</code> in <code>src/sculptor/carving.py</code>). They also reuse the controller with the chisel axis in the task and the posture pulled toward the IK pose (<code>rrmc</code> and <code>servo</code> in <code>src/sculptor/controller.py</code>), the rule for cuts (<code>is_cut</code>), and the way out of the block, backing out $0.09$ m (<code>RETRACT</code>) and moving with <code>joint_move</code>. <code>Carver</code> in <code>src/sculptor/carving.py</code> runs all of it.</p>
 <p>With 4 sides the table turns $59$ times instead of $1603$, with the same $8$ blocked cubes (section 1). With the axis in the task the chisel stays within $0.87$ degrees of its direction, against $35.24$ with the position only (section 2).</p>
-<p>When every move is a cut the tip spends $364$ steps in the statue; cutting only between neighbours takes it to zero. Backing out $0.09$ m with the posture toward the IK pose leaves no hitbox contact and no joint past its limit, and the whole carving takes $57.391$ simulated minutes (section 3). Here the table still turns at once and the statue is the proxy pawn; the next notebook adds the PID of the table and the 3D model.</p>
+<p>When every move is a cut the tip enters $48$ statue cubes; cutting only between neighbours takes it to zero. Backing out $0.09$ m with the posture toward the IK pose leaves no hitbox contact and no joint past its limit, and the whole carving takes $57.391$ simulated minutes (section 3). Here the table still turns at once and the statue is the proxy pawn; the next notebook adds the PID of the table and the 3D model.</p>
 </div>
 </div>
 </div>
