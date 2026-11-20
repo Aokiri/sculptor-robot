@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from sculptor.cell import wrap_angle
-from sculptor.table import KD, KI, KP, PID, Table
+from sculptor.table import KD, KI, KP, PID, Table, profile
 
 DT = 0.05
 
@@ -54,6 +54,33 @@ def test_the_pd_stops_where_the_p_term_holds_the_disturbance():
     # Still, past the goal by d / kp
     assert abs(table.omega) < 1e-6
     assert np.isclose(table.phi - np.pi / 2, 2.0 / KP, atol=1e-6)
+
+
+def test_the_profile_goes_from_start_to_goal_with_zero_speed_at_both_ends():
+    start, goal, duration = 1.0, 1.0 + np.pi / 2, 3.0
+    assert profile(start, goal, 0.0, duration) == start
+    assert profile(start, goal, duration, duration) == pytest.approx(goal)
+    assert profile(start, goal, 2 * duration, duration) == pytest.approx(goal)
+    assert profile(start, goal, duration / 2, duration) == pytest.approx((start + goal) / 2)
+    h = 1e-6
+    assert abs(profile(start, goal, h, duration) - start) / h < 1e-4
+    assert abs(goal - profile(start, goal, duration - h, duration)) / h < 1e-4
+
+
+def test_a_profile_of_zero_seconds_is_the_step():
+    assert profile(0.0, 1.0, 0.0, 0.0) == 1.0
+
+
+def test_the_pid_on_the_profile_goes_less_past_the_goal_than_on_the_step():
+    def largest_past(duration: float) -> float:
+        table, pid, past = Table(), PID(KP, KI, KD, DT), 0.0
+        for k in range(int(15.0 / DT)):
+            table.step(pid(profile(0.0, np.pi / 2, (k + 1) * DT, duration) - table.phi), DT)
+            past = max(past, table.phi - np.pi / 2)
+        assert table.stopped_at(np.pi / 2)
+        return past
+
+    assert largest_past(3.0) < largest_past(0.0) / 2
 
 
 def test_the_pid_stops_on_the_goal_with_the_integral_holding_the_disturbance():

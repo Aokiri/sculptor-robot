@@ -14,7 +14,7 @@ from sculptor.cell import N_SIDES, Cell, wrap_angle
 from sculptor.collision import Hitboxes, cube_at, touched
 from sculptor.controller import K0, MAX_STEPS, RETRACT, joint_move, joint_velocity, rrmc, servo
 from sculptor.model import Voxels
-from sculptor.table import PID, Table
+from sculptor.table import PID, Table, profile
 
 # Time step of the simulation [s]
 DT: float = 0.05
@@ -420,18 +420,20 @@ class Carver:
             self._sample(q, angle, -1, self._robot.fkine(q, tool=self._cell.tip).t)
 
     def _turn_with_pid(self, q: np.ndarray, k: int) -> None:
-        """The PID turns the table from phi[k - 1] to phi[k] the short way, with the arm still out of the block.
+        """The table turns from phi[k - 1] to phi[k] the short way, with the arm still out of the block.
 
-        The arm waits until the table is stopped on the new angle. After that the PID keeps holding the
-        table there, so the cuts of the side use phi[k].
+        The motion profile says where the table should be at each step, and the PID makes it follow the
+        profile. The arm waits until the table is stopped on the new angle. After that the PID keeps
+        holding the table there, so the cuts of the side use phi[k].
         """
         if self._phi[k] == self._phi[k - 1]:
             return
-        goal = self._phi[k - 1] + wrap_angle(self._phi[k] - self._phi[k - 1])
-        table, pid = Table(self._phi[k - 1]), PID(dt=DT)
+        start = self._phi[k - 1]
+        goal = start + wrap_angle(self._phi[k] - start)
+        table, pid = Table(start), PID(dt=DT)
         tip_W = self._robot.fkine(q, tool=self._cell.tip).t
-        for _ in range(MAX_STEPS):
-            table.step(pid(goal - table.phi), DT)
+        for n in range(MAX_STEPS):
+            table.step(pid(profile(start, goal, (n + 1) * DT) - table.phi), DT)
             self._counts["steps"] += 1
             self._counts["table turning [s]"] += DT
             self._sample(q, table.phi, -1, tip_W)

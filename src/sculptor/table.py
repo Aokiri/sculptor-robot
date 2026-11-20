@@ -1,4 +1,4 @@
-"""The turning table and the PID on its angle."""
+"""The turning table, its motion profile and the PID that makes it follow the profile."""
 
 import numpy as np
 
@@ -8,9 +8,12 @@ from sculptor.controller import TOLERANCE
 # about 132 kg, so I = m (a^2 + b^2) / 12 = 2.4 kg m^2 for the block, rounded up for the table top
 INERTIA: float = 2.6    # [kg m^2]
 
-# A constant torque on the table that the controller does not know about. It stands for what
-# the model leaves out (friction of the bearing, a block not centred on the axis); the value is assumed
+# A constant torque on the table that the controller does not know about. It stands for what the
+# model leaves out, like the friction of the bearing and the loads on it; the value is assumed
 DISTURBANCE: float = 2.0    # [N m]
+
+# Time of a quarter turn along the motion profile, chosen in notebook 05
+TURN_TIME: float = 3.0      # [s]
 
 # Gains of the PID, tuned by hand in notebook 05
 KP: float = 40.0    # [N m / rad]
@@ -21,6 +24,18 @@ KD: float = 20.0    # [N m s / rad]
 # is within the tolerance of the tip, and the table barely moves
 PHI_TOLERANCE: float = TOLERANCE / 0.212    # [rad]
 OMEGA_TOLERANCE: float = 0.01               # [rad/s]
+
+
+def profile(start: float, goal: float, t: float, duration: float = TURN_TIME) -> float:
+    """Where the table should be t seconds after it starts turning from start to goal [rad].
+
+    It goes smoothly from start to goal in duration seconds, with zero speed at both ends:
+    start + (goal - start) (3 s^2 - 2 s^3), with s = t / duration. With duration 0 it jumps to the goal.
+    """
+    if duration <= 0:
+        return goal
+    s = min(t / duration, 1.0)
+    return start + (goal - start) * (3 * s**2 - 2 * s**3)
 
 
 class Table:
