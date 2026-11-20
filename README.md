@@ -6,7 +6,7 @@
 
 A Panda arm carves a statue out of a marble block that sits on a rotating table. Everything is simulated, with Python and the Robotics Toolbox for the control and Swift for the 3D view.
 
-Midterm project of *Robot Control Applications* (SUPSI). Work in progress: the scene, the frames, the voxelization of a 3D model, the reach and collision checks, the controller of the arm, the PID of the table, the full carving of the pawn (`carving.run`, saved as a log) and its replay with the model on top are done. Notebook 06 compares 60 carvings with open and closed loop, joint noise and the posture task on or off.
+Midterm project of *Robot Control Applications* (SUPSI). The minimum is done: the scene, the frames, the voxelization of a 3D model, the reach and collision checks, the controller of the arm, the table following a motion profile with a PID, the full carving of the pawn (`carving.run`, saved as a log), the comparison of open and closed loop with noise on the joints, and the replay with the model on top. The extensions come next.
 
 <table>
   <tr>
@@ -48,7 +48,7 @@ The block is made of small cubes (voxels). We take a 3D model of the statue, and
 ```mermaid
 flowchart TD
     A["3D model of the statue"] --> B["Voxelize the model"]
-    B --> C["Turn the table to the next side (PID)"]
+    B --> C["Turn the table to the next side (motion profile and PID)"]
     C --> D["Find the next cube in the world"]
     D --> E["Move the tool there (resolved-rate control)"]
     E --> F["Remove the touched cube and save the step"]
@@ -61,7 +61,7 @@ flowchart TD
 
 **1. Voxelize.** The model is scaled to the block and turned into cubes. Block minus statue = the cubes to remove.
 
-**2. Turn the table.** A PID moves the table to the angle of the next side. The arm waits until the table stops.
+**2. Turn the table.** The table follows a smooth motion profile to the angle of the next side, and a PID on its angle makes it follow the profile. The arm waits until the table stops.
 
 **3. Find the cube.** Each cube is known in the block frame. With the table rotated by $\varphi$, in the world it is:
 
@@ -91,8 +91,9 @@ Each choice was measured in a notebook before fixing it in `src/sculptor/`.
 | Top layer first, outside in | 8 of 1605 marble cubes blocked by the chisel, against 1589 in the reverse order | 03 |
 | Table turns between 4 sides | The table turns 59 times instead of 1603, with the same 8 blocked cubes; 8 sides block 86 | 04 |
 | Axis of the chisel in the task | The chisel stays within 0.87 degrees of its direction, against 35.24 with the position only | 04 |
-| Cuts only between neighbours, backing out 0.09 m otherwise | The tip spends 364 steps in the statue when every move is a cut, and none with the rule; backing out 0.09 m with the posture toward the IK pose leaves no hitbox contact | 04 |
+| Cuts only between neighbours, backing out 0.09 m otherwise | The tip enters 48 statue cubes when every move is a cut, and none with the rule; backing out 0.09 m with the posture toward the IK pose leaves no hitbox contact | 04 |
 | PID on the table, $k_p = 40$, $k_d = 20$, $k_i = 40$ | With a constant disturbance the PD stops 2.86 degrees past the goal; the PID stops on it from 5.4 s, the least past the goal of the gains that stop | 05 |
+| The table follows a motion profile of 3 s, with the PID | The PID on the profile goes 2.71 degrees past the goal, against 25.40 on a step, with a largest torque of 4.74 N m against 65.97; the profile alone, without the PID, ends 2240.25 degrees past the goal | 05 |
 | Joints stop at their limits | On the pawn model joint 7 went 0.575 rad past its limit; stopped there, nothing else in the carving changes | 05 |
 
 ## Folders
@@ -118,7 +119,7 @@ Modules in `src/sculptor/` (they are added step by step):
 | `model.py` | The block as voxels, the voxelization of a 3D model (`voxelize`, `drop_interior`), the proxy pawn and the height of the statue |
 | `collision.py` | Sphere hitboxes of the arm, the hand and the chisel, and which cube the point of the chisel is in |
 | `controller.py` | Resolved-rate control of the chisel tip, the moves in joint space and the stop at the joint limits |
-| `table.py` | The turning table (an inertia with a constant disturbance) and the PID on its angle, with its gains |
+| `table.py` | The turning table (an inertia with a constant disturbance), its motion profile and the PID on its angle, with its gains |
 | `carving.py` | The carving order, the cuts and repositions, the carving simulation (`Carver`, `make_carver`, `run`) and its saved steps (`Log`) |
 | `evaluation.py` | Counts and plots from a saved run |
 
@@ -157,13 +158,13 @@ On Windows, Swift cannot load meshes out of the box. The notebooks fix this in t
 | `02_voxelization` | Turns the 3D model of the pawn into cubes and compares the cube sizes by the detail they keep | under 1 min |
 | `03_reachability` | Finds the tilt of the chisel and the height of the statue the arm can reach, and checks the hitboxes against the cubes in the carving order | about 4 min |
 | `04_arm_control` | Chooses the sides of the block and compares resolved-rate controllers for the chisel tip, and finds which moves are cuts and how the arm leaves the block | about 6 min |
-| `05_table_control` | Tunes the PID of the table, adds it to the carving, carves the pawn model with the joints stopped at their limits and saves the log of the run | about 4 min |
-| [06_control_comparison](notebooks/06_control_comparison.ipynb) | Compares statue damage, remaining marble and tip accuracy using the two published result tables | under 1 min from the tables |
+| `05_table_control` | Tunes the PID of the table and its motion profile, adds them to the carving, carves the pawn model with the joints stopped at their limits and saves the log of the run | about 4 min |
+| `06_control_comparison` | Compares statue damage, remaining marble and tip accuracy of open and closed loop with noise on the joints, from the two saved tables (`experiments/control_comparison.py` computes them) | under 1 min from the tables |
 | `07_replay` | Reads the log of 05, compares what is left of the block with the model, and plays the carving back in Swift with the model on top (needs the log of 05) | under 1 min, about 1.5 min when it records the GIFs |
 
 The timings in `00_swift_prototype` depend on the machine and the browser; they were measured on an Intel Core i7-14700HX with 16 GB of RAM, Windows 11 and Firefox.
 
-**Saved results.** Results that the next notebooks read are saved in `results/<notebook>/`. `05_table_control` saves the log of the carving of the pawn model in `results/05_table_control/carving_pawn.npz` (about 4 MB; every step of the joints, the table angle, the target cube and the tip error, and when each cube was removed), and writes it again every time it runs.
+**Saved results.** Results that the next notebooks read are saved in `results/<notebook>/`. `05_table_control` saves the log of the carving of the pawn model in `results/05_table_control/carving_pawn.npz` (about 4 MB; every step of the joints, the table angle, the target cube and the tip error, and when each cube was removed), and writes it again every time it runs. `06_control_comparison` reads two tables in `results/06_control_comparison/` (one row per run, and the arrival errors of one seed). `uv run python -m experiments.control_comparison --jobs 10` computes them again from the log of 05, with the 60 runs of open and closed loop (about 3 min with 10 jobs); the full log of each run stays local, in `results/06_control_comparison/logs/`.
 
 **Recordings.** The Swift scenes are recorded as GIFs in `results/recordings/`, named after their notebook (`01_cell_frames_turn.gif`), and shown in the notebooks and in their HTML export. A notebook records a scene only when its GIF is missing or when `RECORD = True` in its setup; otherwise it shows the saved one.
 
