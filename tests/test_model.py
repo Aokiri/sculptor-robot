@@ -91,7 +91,24 @@ def test_drop_interior_removes_only_the_hidden_statue_cubes():
     assert (0.0, 0.0, 0.15) not in kept  # in the middle
     assert (0.0, 0.0, 0.25) in kept  # on top, it can be seen
     assert np.count_nonzero(~dropped.is_statue) == np.count_nonzero(~voxels.is_statue)
+    
 
+def test_voxelize_fills_overlapping_parts(tmp_path):
+    # Two closed boxes that overlap in z, like a model glued from pieces: 9 x 9 cm across,
+    # the lower one from 0 to 6 cm and the upper one from 3 to 9 cm. The ray crosses the surface
+    # twice in the overlap, so counting all triangles together would leave the middle layer out
+    lower = trimesh.creation.box(extents=[0.09, 0.09, 0.06])
+    lower.apply_translation([0, 0, 0.03])
+    upper = lower.copy()
+    upper.apply_translation([0, 0, 0.03])
+    trimesh.util.concatenate([lower, upper]).export(tmp_path / "parts.stl")
+
+    voxels = voxelize(tmp_path / "parts.stl", height=0.09, size=0.03)
+
+    statue = voxels.centers[voxels.is_statue]
+    assert len(statue) == 3 * 3 * 3
+    np.testing.assert_allclose(np.unique(statue[:, 2].round(9)), [0.015, 0.045, 0.075])
+    
 
 @pytest.mark.parametrize("height, size", [(0.12, 0.03), (0.42, 0.03), (0.42, 0.06)])
 def test_proxy_pawn_is_symmetric_and_has_a_marble_margin(height, size):
